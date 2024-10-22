@@ -70,26 +70,30 @@ def voronoi_field(field,sites,**kwargs):
     rho=1-np.sum(soft**beta,axis=0)
     return rho
 
-def generate_voronoi():
-    x_len = 100
-    y_len = 100
-    coords = np.indices((x_len, y_len))
-    coordinates = np.stack(coords, axis=-1)
+def generate_voronoi(para,p:np.array):
+    """
+
+    :param para:
+    :param p: a params 1-d array, can be divided into sites,Dm,cauchy_points.
+    :return:
+    """
+    coordinates=para["coordinates"]
+    sites_num=para["sites_num"]
+    Dm_dim=para["Dm_dim"]
+
+    shapes=[(sites_num,Dm_dim),(sites_num,Dm_dim,Dm_dim),(sites_num,Dm_dim)]
+    sites_len=(shapes[0][0]*shapes[0][1])
+    Dm_len=shapes[1][0]*shapes[1][1]*shapes[1][2]
+    cauchy_len=shapes[2][0]*shapes[2][1]
+
+    sites=p[0:sites_len].reshape(shapes[0][0],shapes[0][1])
+    Dm=p[sites_len:sites_len+Dm_len].reshape(shapes[1][0],shapes[1][1],shapes[1][2])
+    cauchy_points=p[sites_len+Dm_len:sites_len+Dm_len+cauchy_len].reshape(shapes[2][0],shapes[2][1])
+
+    coordinates = np.stack(coordinates, axis=-1)
     cauchy_field = coordinates.copy()
-    np.random.seed(0)
-    # sites=np.array(([20,50],[80,50]))
-    # cauchy_points=np.array(([40,20],[50,70]))
-
-    sites = np.random.randint(low=-20, high=120, size=(20, 2))
-    cauchy_points = sites.copy()
-    cauchy_points = cauchy_points + np.random.normal(loc=0, scale=10, size=cauchy_points.shape)
-
-    Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    Dm[0] = np.array(([1, 0], [0, 1]))
-
-    # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
-    # field=voronoi_field(coordinates, sites, Dm=Dm)
     field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points)
+    return field
 
 if __name__ == '__main__':
 

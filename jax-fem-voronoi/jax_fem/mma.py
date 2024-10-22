@@ -482,6 +482,7 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
 #
 #     return rho
 
+
 ###changkun sun rewritten here
 def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints, generate_rho):
     H, Hs = compute_filter_kd_tree(fe)
@@ -505,15 +506,15 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
 
     while loop < optimizationParams['maxIters']:
         loop += 1
-
-        rho = generate_rho(p)
+        """还需考虑"""
+        rho = generate_rho(optimizationParams,p)
 
         print(f"MMA solver...")
 
-        J, dJ = objectiveHandle(rho)
-        vc, dvc = consHandle(rho, loop)
+        J, dJ = objectiveHandle(p)
+        vc, dvc = consHandle(p, loop)
 
-        dJ, dvc = applySensitivityFilter(ft, rho, dJ, dvc)
+        dJ, dvc = applySensitivityFilter(ft, p, dJ, dvc)
 
         J, dJ = J, dJ.reshape(-1)[:, None]
         vc, dvc = vc[:, None], dvc.reshape(dvc.shape[0], -1)
