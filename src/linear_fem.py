@@ -12,12 +12,11 @@ import matplotlib.pyplot as plt
 from jax_fem.problem import Problem
 from jax_fem.solver import solver
 from jax_fem.utils import save_sol
-from jax_fem.generate_mesh import get_meshio_cell_type, Mesh
+from jax_fem.generate_mesh import get_meshio_cell_type, Mesh,rectangle_mesh
 from jax_fem import logger
 
 import logging
 
-from generate_mesh import rectangle_mesh
 
 logger.setLevel(logging.DEBUG)
 
@@ -65,7 +64,7 @@ class LinearElasticity(Problem):
         thetas = thetas.reshape(-1, 1)
         theta = np.repeat(thetas[:, None, :], self.fe.num_quads, axis=1)
         self.internal_vars=[theta]
-        return theta
+        return thetas
 
 # Specify mesh-related information (second-order tetrahedron element).
 ele_type = 'QUAD4'
@@ -94,35 +93,21 @@ p= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)
 
 
 # Define boundary locations.
-def left(point):
+def fixed_location(point):
     return np.isclose(point[0], 0., atol=1e-5)
 
-
-def right(point):
+def load_location(point):
     return np.isclose(point[0], Lx, atol=1e-5)
 
-
-# Define Dirichlet boundary values.
-# This means on the 'left' side, we apply the function 'zero_dirichlet_val'
-# to all components of the displacement variable u.
-def zero_dirichlet_val(point):
+def dirichlet_val(point):
     return 0.
 
+dirichlet_bc_info = [[fixed_location] * 2, [0, 1], [dirichlet_val] * 2]
 
-dirichlet_bc_info = [[left] * 2, [0, 1], [zero_dirichlet_val] * 2]
-
-# Define Neumann boundary locations.
-# This means on the 'right' side, we will perform the surface integral to get
-# the tractions with the function 'get_surface_maps' defined in the class 'LinearElasticity'.
-location_fns = [right]
+location_fns = [load_location]
 
 # Create an instance of the problem.
-problem = LinearElasticity(mesh,
-                           vec=2,
-                           dim=2,
-                           ele_type=ele_type,
-                           dirichlet_bc_info=dirichlet_bc_info,
-                           location_fns=location_fns)
+problem = LinearElasticity(mesh,vec=2,dim=2,ele_type=ele_type,dirichlet_bc_info=dirichlet_bc_info,location_fns=location_fns)
 thetas=problem.set_voronoi(optimizationParams,p)
 
 # Solve the defined problem.
@@ -145,17 +130,14 @@ Emin = 1e-3 * Emax
 nu = 0.3
 penal = 3.
 E = (Emin + (Emax - Emin) * thetas ** penal)
-eps11 = epsilon[:,:,0, 0,None]
-eps22 = epsilon[:,:,1, 1,None]
-eps12 = epsilon[:,:,0, 1,None]
+eps11 = epsilon[:,:,0, 0]
+eps22 = epsilon[:,:,1, 1]
+eps12 = epsilon[:,:,0, 1]
 sig11 = E / (1 + nu) / (1 - nu) * (eps11 + nu * eps22)
 sig22 = E / (1 + nu) / (1 - nu) * (nu * eps11 + eps22)
 sig12 = E / (1 + nu) * eps12
-sigma_1 = np.concatenate([sig11, sig12], axis=-1)  # (num_cells, num_quads, 2)
-sigma_2 = np.concatenate([sig12, sig22], axis=-1)  # (num_cells, num_quads, 2)
-
-# 然后再沿另一个新轴拼接成 2x2 矩阵
-sigma = np.concatenate([sigma_1[:, :, None, :], sigma_2[:, :, None, :]], axis=2)
+sigma = np.array([[sig11, sig12], [sig12, sig22]])
+sigma= np.transpose(sigma, (2, 3, 0, 1))
 
 
 # (num_cells, num_quads)
@@ -166,12 +148,16 @@ cells_JxW = problem.JxW[:, 0, :]
 sigma_average = np.sum(sigma * cells_JxW[:, :,None,None], axis=1) / np.sum(cells_JxW, axis=1)[:,None,None]
 
 # Von Mises stress
+trace_sigma_avg = np.trace(sigma_average, axis1=1, axis2=2)  # (num_cells,)
+identity_matrix = np.eye(problem.dim)  # (dim, dim)
+
+# 扩展迹的维度并与单位矩阵相乘，生成偏应力张量
+s_dev = sigma_average - (1 / problem.dim) * trace_sigma_avg[:, None, None] * identity_matrix
 # (num_cells, dim, dim)
-s_dev = (sigma_average - 1 / problem.dim * np.trace(sigma_average, axis1=1, axis2=2)[:, None, None]
-         * np.eye(problem.dim)[None, :, :])
+# s_dev = (sigma_average - 1 / problem.dim * np.trace(sigma_average, axis1=1, axis2=2)* np.eye(problem.dim))
 # (num_cells,)
 vm_stress = np.sqrt(3. / 2. * np.sum(s_dev * s_dev, axis=(1, 2)))
-thetas=np.mean(thetas.squeeze(-1), axis=-1)
+thetas=thetas.squeeze(-1)
 # Store the solution to local file.
 vtk_path = os.path.join(data_path, 'vtk/u.vtu')
 save_sol(problem.fes[0], sol_list[0], vtk_path, cell_infos=[('vm_stress', vm_stress),("theta",thetas)])
