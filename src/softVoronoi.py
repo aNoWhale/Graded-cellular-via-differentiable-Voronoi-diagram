@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
+
 def batch_softmax(matrices):  # 形状 (1, 100, 100)
     exp_matrices = np.exp(-1 * matrices) #(2,100,100)
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 形状 (1, 100, 100)
@@ -85,7 +86,8 @@ def generate_voronoi(para,p:np.array):
     sites_len=(shapes[0][0]*shapes[0][1])
     Dm_len=shapes[1][0]*shapes[1][1]*shapes[1][2]
     cauchy_len=shapes[2][0]*shapes[2][1]
-
+    if p.shape[0]==1 and p.shape[1]!=1:
+        p=p[0]
     sites=p[0:sites_len].reshape(shapes[0][0],shapes[0][1])
     Dm=p[sites_len:sites_len+Dm_len].reshape(shapes[1][0],shapes[1][1],shapes[1][2])
     cauchy_points=p[sites_len+Dm_len:sites_len+Dm_len+cauchy_len].reshape(shapes[2][0],shapes[2][1])
@@ -95,6 +97,17 @@ def generate_voronoi(para,p:np.array):
     field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points)
     return field
 
+def generate_gene_random(op,Nx,Ny)->np.ndarray:
+    sites_num=op["sites_num"]
+    margin=op["margin"]
+    sites=np.ones((sites_num, 2))
+    sites[:, 0] = np.random.randint(low=0 - margin, high=Nx + margin, size=sites_num)
+    sites[:, 1] = np.random.randint(low=0 - margin, high=Ny + margin, size=sites_num)
+    Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    cauchy_points=sites.copy()
+    p= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
+    return p
+
 if __name__ == '__main__':
 
     start_time = time.time() #计时起点
@@ -103,7 +116,6 @@ if __name__ == '__main__':
     coords = np.indices((x_len, y_len))
     coordinates = np.stack(coords, axis=-1)
     cauchy_field = coordinates.copy()
-    np.random.seed(0)
 
     # sites=np.array(([20,50],[80,50]))
     # cauchy_points=np.array(([40,20],[50,70]))

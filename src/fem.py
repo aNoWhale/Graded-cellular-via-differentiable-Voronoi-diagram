@@ -202,7 +202,6 @@ vf = 0.5
 
 
 coordinates = np.indices((Nx, Ny))
-onp.random.seed(0)
 sites_num=50
 dim=2
 """这里有问题"""
