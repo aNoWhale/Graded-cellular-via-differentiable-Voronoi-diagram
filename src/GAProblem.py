@@ -4,6 +4,39 @@ import numpy as np
 import jax.numpy as jnp
 from softVoronoi import generate_gene_random
 from linear_fem import linear_fem
+from tqdm import tqdm
+##### support for numpy
+def cxTwoPointCopy(ind1, ind2):
+    """Execute a two points crossover with copy on the input individuals. The
+    copy is required because the slicing in numpy returns a view of the data,
+    which leads to a self overwriting in the swap operation. It prevents
+    ::
+
+        >>> import numpy
+        >>> a = numpy.array((1,2,3,4))
+        >>> b = numpy.array((5,6,7,8))
+        >>> a[1:3], b[1:3] = b[1:3], a[1:3]
+        >>> print(a)
+        [1 6 7 4]
+        >>> print(b)
+        [5 6 7 8]
+    """
+    size = len(ind1) if len(ind1.shape)==1 else ind1.shape[1]
+    cxpoint1 = random.randint(1, size)
+    cxpoint2 = random.randint(1, size - 1)
+    if cxpoint2 >= cxpoint1:
+        cxpoint2 += 1
+    else: # Swap the two cx points
+        cxpoint1, cxpoint2 = cxpoint2, cxpoint1
+    if len(ind1.shape)!=1:
+        ind1[:,cxpoint1:cxpoint2], ind2[:,cxpoint1:cxpoint2] \
+            = ind2[:,cxpoint1:cxpoint2].copy(), ind1[:,cxpoint1:cxpoint2].copy()
+    else:
+        ind1[cxpoint1:cxpoint2], ind2[cxpoint1:cxpoint2] \
+            = ind2[cxpoint1:cxpoint2].copy(), ind1[cxpoint1:cxpoint2].copy()
+
+    return ind1, ind2
+
 # 定义问题和个体
 
 creator.create("FitnessMulti", base.Fitness, weights=(-1.0, 1.0))
@@ -30,7 +63,7 @@ toolbox.register("individualCreator", tools.initRepeat, creator.Individual,toolb
 toolbox.register("population",tools.initRepeat,list,toolbox.individualCreator)
 
 toolbox.register("select", tools.selTournament, tournsize=3) #锦标赛
-toolbox.register("mate", tools.cxTwoPoint) #交叉
+toolbox.register("mate", cxTwoPointCopy) #交叉
 # toolbox.register("mutate", tools.mutFlipBit, indpb=0.02) #翻转位 不使用
 toolbox.register("mutate",tools.mutUniformInt,low=low,up=up,indpb=0.02)
 
@@ -54,9 +87,9 @@ def FitnessCalculationFunction(individual):
 toolbox.register("evaluate",FitnessCalculationFunction)
 
 # 设置遗传算法参数
-population = toolbox.population(n=50)  # 种群大小
+population = toolbox.population(n=3)  # 种群大小
 ngen = 10  # 迭代次数
-for gen in range(ngen):
+for gen in tqdm(range(ngen),leave=False,desc="Generation iterating"):
     # 评估种群
     fitnesses = list(map(toolbox.evaluate, population))
     for ind, fit in zip(population, fitnesses):

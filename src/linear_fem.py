@@ -15,7 +15,7 @@ from jax_fem.solver import solver
 from jax_fem.utils import save_sol
 from jax_fem.generate_mesh import get_meshio_cell_type, Mesh,rectangle_mesh
 from jax_fem import logger
-
+import tqdm as tqdm
 import logging
 
 from softVoronoi import generate_voronoi, generate_gene_random
@@ -119,8 +119,8 @@ def linear_fem(Nx,Ny,Lx,Ly,optimizationParams,p,filename,load:np.array,load_loca
     # Do some cleaning work. Remove old solution files.
     data_path = os.path.join(os.path.dirname(__file__), 'data')
     files = glob.glob(os.path.join(data_path, f'vtk/*'))
-    for f in files:
-        os.remove(f)
+    # for f in files:
+    #     os.remove(f)
 
     # (num_cells, num_quads, vec, dim)
     u_grad = problem.fes[0].sol_to_grad(sol_list[0])
@@ -162,7 +162,7 @@ def linear_fem(Nx,Ny,Lx,Ly,optimizationParams,p,filename,load:np.array,load_loca
     # Store the solution to local file.
     vtk_path = os.path.join(data_path, f'vtk/{filename}.vtu')
     save_sol(problem.fes[0], sol_list[0], vtk_path, cell_infos=[('vm_stress', vm_stress),("theta",thetas)])
-
+    tqdm.tqdm.write(f'{filename}.vtu done,compliance:{compliance}')
     return compliance
 
 if __name__ == '__main__':
