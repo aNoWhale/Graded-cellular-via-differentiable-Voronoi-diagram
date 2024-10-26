@@ -44,9 +44,9 @@ def cxTwoPointCopy(ind1, ind2):
 
     return ind1, ind2
 
-# 定义问题和个体
-start_time=time.time()
 
+start_time=time.time()
+# define problem and individual
 creator.create("FitnessMulti", base.Fitness, weights=(-1.0, 1.0))
 creator.create("Individual", np.ndarray, fitness=creator.FitnessMulti)
 
