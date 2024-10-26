@@ -7,7 +7,8 @@ from matplotlib import pyplot as plt
 def batch_softmax(matrices):  # 形状 (1, 100, 100)
     exp_matrices = np.exp(-1 * matrices) #(2,100,100)
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 形状 (1, 100, 100)
-    return exp_matrices / sum_vals
+    soft=exp_matrices / sum_vals
+    return soft
 
 def relu(x,y=0.):
     return np.maximum(y, x)
@@ -30,10 +31,11 @@ def d_mahalanobis(x, xm, Dm):
     :param xm:
     :return:
     """
-    diff= x[np.newaxis, :, :, :] - xm[:, np.newaxis, np.newaxis, :] # Nc*n*n*dim
-    dot1=np.einsum('ijkl,ilm->ijkm', diff, Dm)
-    dot2=np.einsum('ilm,ijkl->ijkl', Dm,diff)
-    dist_matrix=np.sqrt(np.einsum("ijkl,ijkl->ijk",dot1,dot2)) # Nc*n*n*dim Nc*dim*dim
+    diff= x[np.newaxis, :, :,np.newaxis, :] - xm[:, np.newaxis, np.newaxis,np.newaxis, :] # Nc*n*n*dim
+    dot1=np.einsum('ijklm,imn->ijkln', diff, Dm.swapaxes(1,2))
+    dot2=np.einsum('imn,ijknl->ijkml', Dm,diff.swapaxes(-1,-2))
+    nor=np.einsum("ijklm,ijkml->ijk",dot1,dot2)
+    dist_matrix=np.sqrt(nor) # Nc*n*n*dim Nc*dim*dim
     return dist_matrix
 
 def d_sigmoid(field, sites, **kwargs):

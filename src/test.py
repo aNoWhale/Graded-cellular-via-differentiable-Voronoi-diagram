@@ -1,10 +1,16 @@
-import numpy as np
+import logging
+from tqdm import tqdm
+import time
 
+# 设置 logging
+logging.basicConfig(level=logging.INFO)
 
+# 运行进度条
+with tqdm(total=10, leave=True) as pbar:
+    for i in range(10):
+        time.sleep(0.5)  # 模拟一些工作
+        logging.info(f"Processing item {i}")
+        pbar.update(1)  # 更新进度条
 
-# 示例 1D 数组
-array_1d = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9])
-
-
-
-print(array_1d[0:2])
+# 进度条结束后，保持显示
+print("任务完成！")
