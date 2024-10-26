@@ -94,9 +94,9 @@ def FitnessCalculationFunction(individual,gen):
 toolbox.register("evaluate",FitnessCalculationFunction)
 
 # 设置遗传算法参数
-population = toolbox.population(n=10)  # 种群大小
+population = toolbox.population(n=20)  # 种群大小
 
-ngen = 10  # 迭代次数
+ngen = 20  # 迭代次数
 for gen in tqdm(range(ngen),leave=False,desc="Generation iterating"):
     # 评估种群
     gen_array=np.repeat([gen],len(population))
@@ -129,7 +129,7 @@ fits=[]
 for ind in population:
     fits.append(ind.fitness.values)
 best_ind = tools.selBest(population, 1,"fitness")
-print(f"最优值: {best_ind[0].fitness.values}")
+print(f"best: {best_ind[0].fitness.values}")
 best_voronoi=generate_voronoi(optimizationParams,best_ind[0])
 data_path = os.path.join(os.path.dirname(__file__), 'data')
 best_dir = 'data/best'
