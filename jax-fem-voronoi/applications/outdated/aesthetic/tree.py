@@ -139,7 +139,7 @@ config.update("jax_enable_x64", True)
 def objectiveHandleCompliance(rho):
     """MMA solver requires (J, dJ) as inputs
     J has shape ()
-    dJ has shape (...) = rho.shape
+    dJ has shape (...) = p.shape
     """
     J_to, dJ_to = jax.value_and_grad(J_total)(rho)
     output_sol(rho, J_to, 'compliance')
@@ -148,7 +148,7 @@ def objectiveHandleCompliance(rho):
 def objectiveHandleStyle(rho):
     """MMA solver requires (J, dJ) as inputs
     J has shape ()
-    dJ has shape (...) = rho.shape
+    dJ has shape (...) = p.shape
     """
     J_style, dJ_style = style_value_and_grad(rho, output_sol.counter)
     output_sol(rho, J_style, 'style')
@@ -174,7 +174,7 @@ optimizationParamsStyle = {'maxIters':10, 'movelimit':0.1}
 rho = rho_ini
 for i in range(3):
     rho = optimize(problem, rho, optimizationParamsCompliance, objectiveHandleCompliance, consHandle, numConstraints)
-    # rho = optimize(problem, rho, optimizationParamsStyle, objectiveHandleStyle, consHandle, numConstraints)
+    # p = optimize(problem, p, optimizationParamsStyle, objectiveHandleStyle, consHandle, numConstraints)
 
 for i in range(10):
     rho = optimize(problem, rho, {'maxIters':10, 'movelimit':0.05}, objectiveHandleCompliance, consHandle, numConstraints)

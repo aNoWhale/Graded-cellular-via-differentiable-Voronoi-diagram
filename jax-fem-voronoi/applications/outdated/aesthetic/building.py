@@ -168,7 +168,7 @@ config.update("jax_enable_x64", True)
 def objectiveHandleCompliance(rho):
     """MMA solver requires (J, dJ) as inputs
     J has shape ()
-    dJ has shape (...) = rho.shape
+    dJ has shape (...) = p.shape
     """
     J_to, dJ_to = jax.value_and_grad(J_total)(rho)
     output_sol(rho, J_to)
@@ -177,7 +177,7 @@ def objectiveHandleCompliance(rho):
 def objectiveHandleStyle(rho):
     """MMA solver requires (J, dJ) as inputs
     J has shape ()
-    dJ has shape (...) = rho.shape
+    dJ has shape (...) = p.shape
     """
     J_style, dJ_style = style_value_and_grad(rho, output_sol.counter)
     output_sol(rho, J_style)

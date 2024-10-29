@@ -1,5 +1,6 @@
 import time
-import numpy as np
+import numpy as onp
+import jax.numpy as np
 from matplotlib import pyplot as plt
 
 
@@ -37,6 +38,7 @@ def d_mahalanobis(x, xm, Dm):
     nor=np.einsum("ijklm,ijkml->ijk",dot1,dot2)
     dist_matrix=np.sqrt(nor) # Nc*n*n*dim Nc*dim*dim
     return dist_matrix
+
 
 def d_sigmoid(field, sites, **kwargs):
 
@@ -97,14 +99,16 @@ def generate_voronoi(para,p:np.array):
     coordinates = np.stack(coordinates, axis=-1)
     cauchy_field = coordinates.copy()
     field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points)
+    # field[field<0.7]=0
+    # field[field>0.9]=1
     return field
 
 def generate_gene_random(op,Nx,Ny)->np.ndarray:
     sites_num=op["sites_num"]
     margin=op["margin"]
     sites=np.ones((sites_num, 2))
-    sites[:, 0] = np.random.randint(low=0 - margin, high=Nx + margin, size=sites_num)
-    sites[:, 1] = np.random.randint(low=0 - margin, high=Ny + margin, size=sites_num)
+    sites[:, 0] = onp.random.randint(low=0 - margin, high=Nx + margin, size=sites_num)
+    sites[:, 1] = onp.random.randint(low=0 - margin, high=Ny + margin, size=sites_num)
     Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     cauchy_points=sites.copy()
     p= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points

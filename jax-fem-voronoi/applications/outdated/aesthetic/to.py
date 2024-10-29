@@ -136,29 +136,29 @@ style_value_and_grad, initial_loss = style_transfer(problem, rho_ini)
 config.update("jax_enable_x64", True)
 
  
-# def objectiveHandle(rho):
+# def objectiveHandle(p):
 #     """MMA solver requires (J, dJ) as inputs
 #     J has shape ()
-#     dJ has shape (...) = rho.shape
+#     dJ has shape (...) = p.shape
 #     """
-#     J_to, dJ_to = jax.value_and_grad(J_total)(rho)
-#     J_style, dJ_style = style_value_and_grad(rho, output_sol.counter)
+#     J_to, dJ_to = jax.value_and_grad(J_total)(p)
+#     J_style, dJ_style = style_value_and_grad(p, output_sol.counter)
 
 #     J = J_to + J_style
 #     dJ = dJ_to + dJ_style
 
-#     output_sol(rho, J_to)
+#     output_sol(p, J_to)
 #     return J, dJ
 
-# def consHandle(rho, epoch):
+# def consHandle(p, epoch):
 #     """MMA solver requires (c, dc) as inputs
 #     c should have shape (numConstraints,)
 #     gradc should have shape (numConstraints, ...)
 #     """
-#     def computeGlobalVolumeConstraint(rho):
-#         g = np.mean(rho)/vf - 1.
+#     def computeGlobalVolumeConstraint(p):
+#         g = np.mean(p)/vf - 1.
 #         return g
-#     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
+#     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(p)
 #     c, gradc = c.reshape((1,)), gradc[None, ...]
 #     return c, gradc
 
@@ -166,7 +166,7 @@ config.update("jax_enable_x64", True)
 def objectiveHandle(rho):
     """MMA solver requires (J, dJ) as inputs
     J has shape ()
-    dJ has shape (...) = rho.shape
+    dJ has shape (...) = p.shape
     """
     J_to, dJ_to = jax.value_and_grad(J_total)(rho)
     output_sol(rho, J_to)

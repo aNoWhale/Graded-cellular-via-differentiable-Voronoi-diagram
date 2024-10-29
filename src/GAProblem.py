@@ -8,9 +8,9 @@ import jax.numpy as jnp
 from softVoronoi import generate_gene_random
 from linear_fem import linear_fem
 from tqdm import tqdm
-
+import matplotlib.pyplot as plt
 from src.softVoronoi import generate_voronoi
-
+import multiprocessing
 
 ##### support for numpy
 def cxTwoPointCopy(ind1, ind2):
@@ -46,13 +46,15 @@ def cxTwoPointCopy(ind1, ind2):
 
 
 start_time=time.time()
+plt.figure()
+
 # define problem and individual
 creator.create("FitnessMulti", base.Fitness, weights=(-1.0, 1.0))
 creator.create("Individual", np.ndarray, fitness=creator.FitnessMulti)
 
 
-Nx,Ny=100,100
-Lx,Ly=100.,100.
+Nx,Ny=256,256
+Lx,Ly=256.,256.
 sites_num=50
 dim=2
 margin=10
@@ -87,6 +89,24 @@ def FitnessCalculationFunction(individual,gen):
         return jnp.isclose(point[1], 0., atol=1e-5)
     ri=random.randint(0,1000)
     # compute compliance
+
+    # q = multiprocessing.Queue()
+    # jobs = []
+    # p1 = multiprocessing.Process(target=linear_fem, args=(
+    # Nx, Ny, Lx, Ly, optimizationParams, individual, f"{gen}/x_{gen}_{ri}", np.array([100., 0.]), load_location_x,
+    # fixed_location_x))
+    # p2 = multiprocessing.Process(target=linear_fem, args=(
+    # Nx, Ny, Lx, Ly, optimizationParams, individual, f"{gen}/y_{gen}_{ri}", np.array([0., 100.]), load_location_y,
+    # fixed_location_y))
+    # jobs.append(p1)
+    # jobs.append(p2)
+    # p1.start()
+    # p2.start()
+    #
+    # for p in jobs:
+    #     p.join()
+    # results = [q.get() for j in jobs]
+
     x=linear_fem(Nx,Ny,Lx,Ly,optimizationParams,individual,f"{gen}/x_{gen}_{ri}",load=np.array([100.,0.]),load_location=load_location_x,fixed_location=fixed_location_x)
     y=linear_fem(Nx,Ny,Lx,Ly,optimizationParams,individual,f"{gen}/y_{gen}_{ri}",load=np.array([0.,100.]),load_location=load_location_y,fixed_location=fixed_location_y)
     return x,y
@@ -94,16 +114,19 @@ def FitnessCalculationFunction(individual,gen):
 toolbox.register("evaluate",FitnessCalculationFunction)
 
 # 设置遗传算法参数
-population = toolbox.population(n=20)  # 种群大小
-
-ngen = 20  # 迭代次数
+population = toolbox.population(n=5)  # 种群大小
+c_table=["b","c","g","k","m","r","w","y"]
+ngen = 10# 迭代次数
 for gen in tqdm(range(ngen),leave=False,desc="Generation iterating"):
     # 评估种群
     gen_array=np.repeat([gen],len(population))
     fitnesses = list(map(toolbox.evaluate, population,gen_array))
+    i=0
     for ind, fit in zip(population, fitnesses):
         ind.fitness.values = fit
-
+        plt.scatter(gen,fit[0],c=c_table[i%8],marker="+")
+        plt.scatter(gen,fit[1],c=c_table[i%8],marker="^")
+        i+=1
     # 选择、交叉和变异
     offspring = toolbox.select(population, len(population))
     offspring = list(map(toolbox.clone, offspring))
@@ -139,3 +162,4 @@ np.save(f'{best_dir}/best_voronoi.npy', best_voronoi)
 np.save(f"{best_dir}/op.npy",np.array(optimizationParams))
 end_time=time.time()
 print(f"time spent: {end_time-start_time}")
+plt.show()

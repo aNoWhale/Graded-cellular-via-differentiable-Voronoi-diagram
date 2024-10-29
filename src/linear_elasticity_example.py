@@ -163,7 +163,7 @@ def objectiveHandle(rho):
     """
     # MMA solver requires (J, dJ) as inputs
     # J has shape ()
-    # dJ has shape (...) = rho.shape
+    # dJ has shape (...) = p.shape
     J, dJ = jax.value_and_grad(J_total)(rho)
     output_sol(rho, J)
     return J, dJ

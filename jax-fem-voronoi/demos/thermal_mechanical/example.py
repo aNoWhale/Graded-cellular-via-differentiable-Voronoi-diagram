@@ -24,11 +24,11 @@ vtk_dir = os.path.join(data_dir, 'vtk')
 
 # Define the thermal problem. 
 # We solve the following equation (weak form of FEM):
-# (rho*Cp/dt*(T_crt-T_old), Q) * dx + (k*T_crt_grad, Q_grad) * dx - (heat_flux, Q) * ds = 0
+# (p*Cp/dt*(T_crt-T_old), Q) * dx + (k*T_crt_grad, Q_grad) * dx - (heat_flux, Q) * ds = 0
 # where T_crt is the trial function, and Q is the test function.
 class Thermal(Problem):
     # The function 'get_tensor_map' is responsible for the term (k*T_crt_grad, Q_grad) * dx. 
-    # The function 'get_mass_map' is responsible for the term (rho*Cp/dt*(T_crt-T_old), Q) * dx. 
+    # The function 'get_mass_map' is responsible for the term (p*Cp/dt*(T_crt-T_old), Q) * dx.
     # The function 'set_params' makes sure that the Neumann boundary conditions use the most 
     # updated T_old and laser information, i.e., positional information like laser_center (x_l, y_l) and 
     # 'switch' controlling ON/OFF of the laser.

@@ -34,7 +34,7 @@ class Elasticity(Problem):
             Emax = 70.e3
             Emin = 1e-3 * Emax
             nu = 0.3
-            penal = 3.
+            penal = 1.
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -51,19 +51,25 @@ class Elasticity(Problem):
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([0., 100.])
+            return np.array([0., -200.])
 
         return [surface_map]
 
     def set_params(self, params):
         # Override base class method.
+        # full_params = np.ones((self.fe.num_cells, params.shape[0]))
+        # full_params = full_params.at[self.fe.flex_inds].set(params)
+        # thetas = generate_voronoi(self.op, params)
+        # thetas = thetas.reshape(-1, 1)
+        # theta = np.repeat(thetas[:, None, :], self.fe.num_quads, axis=1)
+        # self.full_params = full_params
+        # self.internal_vars = [theta]
+        """from tianxu xue"""
         full_params = np.ones((self.fe.num_cells, params.shape[1]))
         full_params = full_params.at[self.fe.flex_inds].set(params)
         thetas = np.repeat(full_params[:, None, :], self.fe.num_quads, axis=1)
-        # self.full_params = full_params
+        self.full_params = full_params
         self.internal_vars = [thetas]
-        pass
-
     def compute_compliance(self, sol):
         # Surface integral
         boundary_inds = self.boundary_inds_list[0]
@@ -96,9 +102,10 @@ for f in files:
 ele_type = 'QUAD4'
 cell_type = get_meshio_cell_type(ele_type)
 
-Nx = 60
-Ny = 30
-Lx, Ly = 60., 30.
+Nx = 100
+Ny = 50
+Lx, Ly = 100., 50.
+
 meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
 mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
 
@@ -122,6 +129,8 @@ location_fns = [load_location]
 # Define forward problem.
 problem = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
                      location_fns=location_fns)
+
+
 
 # Apply the automatic differentiation wrapper.
 # This is a critical step that makes the problem solver differentiable.
@@ -170,7 +179,7 @@ def objectiveHandle(p):
     """
     # MMA solver requires (J, dJ) as inputs
     # J has shape ()
-    # dJ has shape (...) = rho.shape
+    # dJ has shape (...) = p.shape
     J, dJ = jax.value_and_grad(J_total)(p)
     output_sol(p, J)
     return J, dJ
@@ -180,7 +189,7 @@ def objectiveHandle(p):
 def consHandle(rho, epoch):
     """
     定义约束
-    :param rho:
+    :param p:
     :param epoch:
     :return:
     """
@@ -188,9 +197,10 @@ def consHandle(rho, epoch):
     # c should have shape (numConstraints,)
     # dc should have shape (numConstraints, ...)
     def computeGlobalVolumeConstraint(rho):
+        # thetas = generate_voronoi(op, p)
+        # thetas = thetas.reshape(-1, 1)
         g = np.mean(rho) / vf - 1.
         return g
-
     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
     c, gradc = c.reshape((1,)), gradc[None, ...]
     return c, gradc
@@ -202,21 +212,25 @@ vf = 0.5
 
 
 coordinates = np.indices((Nx, Ny))
-sites_num=50
+sites_num=30
 dim=2
-"""这里有问题"""
+margin=0
 
-
-def generate_points(Nx, Ny, n):
+def generate_points(Nx, Ny, sx,sy):
     # uniform points in 0,Nx 0,Ny
-    x = onp.random.uniform(0, Nx, n)
-    y = onp.random.uniform(0, Ny, n)
-    return np.column_stack((x, y))
+    x = np.linspace(0-margin, Nx+margin, sx)
+    y = np.linspace(0-margin, Ny+margin, sy)
+    points=np.meshgrid(x, y)
+    xa=points[0].flatten()
+    ya=points[1].flatten()
+    points=np.column_stack((xa, ya))
+    return points
 
 
-sites = generate_points(Nx, Ny, sites_num)
+sites = generate_points(Nx, Ny, 10,3)
 
-optimizationParams = {'maxIters': 51, 'movelimit': 10.,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim}
+optimizationParams = {'maxIters': 200, 'movelimit': 0.1,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,"Nx":Nx,"Ny":Ny,"margin":margin}
+problem.op=optimizationParams
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cauchy_points=sites.copy()
 

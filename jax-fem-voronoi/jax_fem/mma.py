@@ -17,6 +17,8 @@ import time
 import scipy
 
 from jax import config
+from tqdm import tqdm
+
 config.update("jax_enable_x64", True)
 
 
@@ -57,9 +59,9 @@ def compute_filter_kd_tree(fe):
     return H, Hs
 
 
-def applySensitivityFilter(ft, rho, dJ, dvc):
-    dJ = np.matmul(ft['H'], rho*dJ/np.maximum(1e-3, rho)/ft['Hs'][:, None])
-    dvc = np.matmul(ft['H'][None, :, :], rho[None, :, :]*dvc/np.maximum(1e-3, rho[None, :, :])/ft['Hs'][None, :, None])
+def applySensitivityFilter(ft, p, dJ, dvc):
+    dJ = np.matmul(ft['H'], p * dJ / np.maximum(1e-3, p) / ft['Hs'][:, None])
+    dvc = np.matmul(ft['H'][None, :, :], p[None, :, :] * dvc / np.maximum(1e-3, p[None, :, :]) / ft['Hs'][None, :, None])
     return dJ, dvc
 
 
@@ -125,6 +127,7 @@ class MMA:
         epsimin = 0.0000001
         raa0 = 0.00001
         albefa = 0.1
+        """需要改，init，需要规范化……"""
         asyinit = 0.5
         asyincr = 1.2
         asydecr = 0.7
@@ -136,12 +139,13 @@ class MMA:
             low = xval-asyinit*(xmax-xmin)
             upp = xval+asyinit*(xmax-xmin)
         else:
-            zzz = (xval-xold1)*(xold1-xold2)
+            zzz = (xval-xold1)*(xold1-xold2) #计算变化的方向
             factor = eeen.copy()
             factor[np.where(zzz>0)] = asyincr
             factor[np.where(zzz<0)] = asydecr
             low = xval-factor*(xold1-low)
             upp = xval+factor*(upp-xold1)
+            # 渐近线范围
             lowmin = xval-10*(xmax-xmin)
             lowmax = xval-0.01*(xmax-xmin)
             uppmin = xval+0.01*(xmax-xmin)
@@ -164,23 +168,26 @@ class MMA:
         xmamieps = 0.00001*eeen
         xmami = np.maximum(xmami,xmamieps)
         xmamiinv = eeen/xmami
+        #xval距离渐近线的距离
         ux1 = upp-xval
         ux2 = ux1*ux1
         xl1 = xval-low
         xl2 = xl1*xl1
         uxinv = eeen/ux1
         xlinv = eeen/xl1
-        p0 = zeron.copy()
-        q0 = zeron.copy()
-        p0 = np.maximum(df0dx,0)
-        q0 = np.maximum(-df0dx,0)
+
+        p0 = np.maximum(df0dx,0) #目标梯度的正部分
+        q0 = np.maximum(-df0dx,0) #目标梯度的负部分
+        # 引入微小扰动pq0防止梯度过小
         pq0 = 0.001*(p0+q0)+raa0*xmamiinv
         p0 = p0+pq0
         q0 = q0+pq0
+        #权重更新，使得p,q与距离有关
         p0 = p0*ux2
         q0 = q0*xl2
         P = np.zeros((m,n)) ## @@ make sparse with scipy?
         Q = np.zeros((m,n)) ## @@ make sparse with scipy?
+        #约束函数的正负梯度
         P = np.maximum(dfdx,0)
         Q = np.maximum(-dfdx,0)
         PQ = 0.001*(P+Q)+raa0*np.dot(eeem,xmamiinv.T)
@@ -189,10 +196,11 @@ class MMA:
 
         # P = (diags(ux2.flatten(),0).dot(P.T)).T
         # Q = (diags(xl2.flatten(),0).dot(Q.T)).T
+        #最终形状应该是 m,n 表示每个约束对每个变量的正负梯度
         P = ux2.T*P
         Q = xl2.T*Q
 
-        b = (np.dot(P,uxinv)+np.dot(Q,xlinv)-fval)
+        b = (np.dot(P,uxinv)+np.dot(Q,xlinv)-fval) # m,1
         # Solving the subproblem by a primal-dual Newton method
         xmma,ymma,zmma,lam,xsi,eta,mu,zet,s = subsolv(m,n,epsimin,low,upp,alfa,\
                                                       beta,p0,q0,P,Q,a0,a,b,c,d)
@@ -209,6 +217,7 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
     epsi = 1
     epsvecn = epsi*een
     epsvecm = epsi*eem
+    # 拉格朗日乘子初始化
     x = 0.5*(alfa+beta)
     y = eem.copy()
     z = np.array([[1.0]])
@@ -218,22 +227,25 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
     eta = een/(beta-x)
     eta = np.maximum(eta,een)
     mu = np.maximum(eem,0.5*c)
+
     zet = np.array([[1.0]])
     s = eem.copy()
     itera = 0
     # Start while epsi>epsimin
-    while epsi > epsimin:
+    while epsi > epsimin: #控制误差参数 epsi 的减小，用于逐步提高计算精度
         epsvecn = epsi*een
         epsvecm = epsi*eem
         ux1 = upp-x
         xl1 = x-low
         ux2 = ux1*ux1
         xl2 = xl1*xl1
+        #计算约束残差
         uxinv1 = een/ux1
         xlinv1 = een/xl1
         plam = p0+np.dot(P.T,lam)
         qlam = q0+np.dot(Q.T,lam)
-        gvec = np.dot(P,uxinv1)+np.dot(Q,xlinv1)
+        gvec = np.dot(P,uxinv1)+np.dot(Q,xlinv1) ## 梯度向量
+
         dpsidx = plam/ux2-qlam/xl2
         rex = dpsidx-xsi+eta
         rey = c+d*y-mu-lam
@@ -251,7 +263,7 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
         residumax = np.max(np.abs(residu))
         ittt = 0
         # Start while (residumax>0.9*epsi) and (ittt<200)
-        while (residumax > 0.9*epsi) and (ittt < 200):
+        while (residumax > 0.9*epsi) and (ittt < 200): #使得残差 residumax 满足精度要求
             ittt = ittt+1
             itera = itera+1
             ux1 = upp-x
@@ -273,6 +285,7 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
             GG = uxinv2.T*P - xlinv2.T*Q
 
             dpsidx = plam/ux2-qlam/xl2
+            #计算变量步长
             delx = dpsidx-epsvecn/(x-alfa)+epsvecn/(beta-x)
             dely = c+d*y-lam-epsvecm/y
             delz = a0-np.dot(a.T,lam)-epsi/z
@@ -327,8 +340,10 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
             ds = -s+epsvecm/lam-(s*dlam)/lam
             xx = np.concatenate((y,z,lam,xsi,eta,mu,zet,s),axis = 0)
             dxx = np.concatenate((dy,dz,dlam,dxsi,deta,dmu,dzet,ds),axis = 0)
-            #
-            stepxx = -1.01*dxx/xx
+            """在这里加了个小常数"""
+            # print(f"dxx:{dxx}")
+            # print(f"xx:{xx}")
+            stepxx = -1.01*dxx/(xx+ 1e-10)
             stmxx = np.max(stepxx)
             stepalfa = -1.01*dx/(x-alfa)
             stmalfa = np.max(stepalfa)
@@ -410,92 +425,29 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
 
     return xmma,ymma,zmma,lamma,xsimma,etamma,mumma,zetmma,smma
 
-## the origin method
-# def optimize(fe, rho_ini, optimizationParams, objectiveHandle, consHandle, numConstraints):
-#     # TODO: Scale objective function value to be always within 1-100
-#     # See comments in https://doi.org/10.1016/j.compstruc.2018.01.008
-#     H, Hs = compute_filter_kd_tree(fe)
-#     ft = {'H':H, 'Hs':Hs}
-#
-#     rho = rho_ini
-#
-#     loop = 0
-#     m = numConstraints # num constraints
-#     n = len(rho.reshape(-1)) # num params
-#
-#     mma = MMA()
-#     mma.setNumConstraints(numConstraints)
-#     mma.setNumDesignVariables(n)
-#     mma.setMinandMaxBoundsForDesignVariables\
-#         (np.zeros((n,1)),np.ones((n,1)))
-#
-#     xval = rho.reshape(-1)[:, None]
-#     xold1, xold2 = xval.copy(), xval.copy()
-#     mma.registerMMAIter(xval, xold1, xold2)
-#     mma.setLowerAndUpperAsymptotes(np.ones((n,1)), np.ones((n,1)))
-#     mma.setScalingParams(1.0, np.zeros((m,1)), \
-#                          10000*np.ones((m,1)), np.zeros((m,1)))
-#     # Move limit is an important parameter that affects TO result; default can be 0.2
-#     mma.setMoveLimit(optimizationParams['movelimit'])
-#
-#     while loop < optimizationParams['maxIters']:
-#         loop = loop + 1
-#
-#         print(f"MMA solver...")
-#
-#         J, dJ = objectiveHandle(rho)
-#         vc, dvc = consHandle(rho, loop)
-#
-#         dJ, dvc = applySensitivityFilter(ft, rho, dJ, dvc)
-#
-#         J, dJ = J, dJ.reshape(-1)[:, None]
-#         vc, dvc = vc[:, None], dvc.reshape(dvc.shape[0], -1)
-#
-#         print(f"J.shape = {J.shape}")
-#         print(f"dJ.shape = {dJ.shape}")
-#         print(f"vc.shape = {vc.shape}")
-#         print(f"dvc.shape = {dvc.shape}")
-#
-#         J, dJ, vc, dvc = np.array(J), np.array(dJ), np.array(vc), np.array(dvc)
-#
-#         start = time.time()
-#
-#         mma.setObjectiveWithGradient(J, dJ)
-#         mma.setConstraintWithGradient(vc, dvc)
-#         mma.mmasub(xval)
-#         xmma, _, _ = mma.getOptimalValues()
-#
-#         xold2 = xold1.copy()
-#         xold1 = xval.copy()
-#         xval = xmma.copy()
-#
-#         mma.registerMMAIter(xval, xold1, xold2)
-#         rho = xval.reshape(rho.shape)
-#
-#         end = time.time()
-#
-#         time_elapsed = end - start
-#
-#         print(f"MMA took {time_elapsed} [s]")
-#
-#         print(f'Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n\n')
-#
-#     return rho
-
 
 ###changkun sun rewritten here
-def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints, generate_rho):
-    H, Hs = compute_filter_kd_tree(fe)
+def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,generate_rho):
+    H, Hs = compute_filter_kd_tree(fe) # related with rho
     ft = {'H': H, 'Hs': Hs}
     p = p_ini
-    loop = 0
+
     m = numConstraints
     n = len(p.reshape(-1))
 
     mma = MMA()
     mma.setNumConstraints(numConstraints)
     mma.setNumDesignVariables(n)
-    mma.setMinandMaxBoundsForDesignVariables(np.zeros((n, 1)), np.ones((n, 1)))
+    margin=optimizationParams['margin']
+    sites_low=np.tile(np.array([0-margin,0-margin]),(optimizationParams["sites_num"],1))
+    sites_up = np.tile(np.array([optimizationParams["Nx"]+ margin, optimizationParams["Ny"]+ margin]), (optimizationParams["sites_num"],1))
+    Dm_low=np.tile(np.array([[0,0],[0,0]]), (sites_low.shape[0], 1, 1))
+    Dm_up=np.tile(np.array([[2,2],[2,2]]), (sites_low.shape[0], 1, 1))
+    cauchy_points_low=sites_low
+    cauchy_points_up=sites_up
+    bound_low=np.concatenate((np.ravel(sites_low),np.ravel(Dm_low),np.ravel(cauchy_points_low)),axis=0)[:,None]
+    bound_up=np.concatenate((np.ravel(sites_up),np.ravel(Dm_up),np.ravel(cauchy_points_up)),axis=0)[:,None]
+    mma.setMinandMaxBoundsForDesignVariables(bound_low,bound_up)
 
     xval = p.reshape(-1)[:, None]
     xold1, xold2 = xval.copy(), xval.copy()
@@ -503,48 +455,57 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
     mma.setLowerAndUpperAsymptotes(np.ones((n, 1)), np.ones((n, 1)))
     mma.setScalingParams(1.0, np.zeros((m, 1)), 10000 * np.ones((m, 1)), np.zeros((m, 1)))
     mma.setMoveLimit(optimizationParams['movelimit'])
+    with tqdm(total=optimizationParams['maxIters']) as pbar:
+        loop = 0
+        while loop < optimizationParams['maxIters']:
+            loop += 1
+            pbar.update(1)
+            print(f"MMA solver...")
+            rho = generate_rho(optimizationParams, p)
+            rho=rho.flatten()[:, None]
+            assert rho.shape[1]==1
+            J, dJ = objectiveHandle(rho) # get from rho = fun(p)
+            vc, dvc = consHandle(rho, loop) # get from rho
 
-    while loop < optimizationParams['maxIters']:
-        loop += 1
-        """还需考虑"""
-        rho = generate_rho(optimizationParams,p)
+            dJ_drho, dvc_drho = applySensitivityFilter(ft, rho, dJ, dvc)
+            def rho_faltten(op,p):
+                fl=generate_rho(op,p).flatten()
+                return fl
+            drho_dp = jax.jacfwd(rho_faltten, argnums=1)(optimizationParams, p)
+            """应为点积"""
+            dJ= np.dot(dJ_drho.T, drho_dp)
+            dvc = np.dot(dvc_drho.squeeze().T, drho_dp)
 
-        print(f"MMA solver...")
+            # J, dJ = J, dJ.reshape(-1)[:, None]
+            # vc, dvc = vc[:, None], dvc.reshape(dvc.shape[0], -1)
+            J, dJ = J, dJ.reshape(-1)[:, None]
+            vc, dvc = vc[:, None], dvc.squeeze()[None,:]
+            print(f"J.shape = {J.shape}")
+            print(f"dJ.shape = {dJ.shape}")
+            print(f"vc.shape = {vc.shape}")
+            print(f"dvc.shape = {dvc.shape}")
 
-        J, dJ = objectiveHandle(p)
-        vc, dvc = consHandle(p, loop)
+            J, dJ, vc, dvc = np.array(J), np.array(dJ), np.array(vc), np.array(dvc)
 
-        dJ, dvc = applySensitivityFilter(ft, p, dJ, dvc)
+            start = time.time()
 
-        J, dJ = J, dJ.reshape(-1)[:, None]
-        vc, dvc = vc[:, None], dvc.reshape(dvc.shape[0], -1)
+            mma.setObjectiveWithGradient(J, dJ)
+            mma.setConstraintWithGradient(vc, dvc)
+            mma.mmasub(xval)
+            xmma, _, _ = mma.getOptimalValues()
 
-        print(f"J.shape = {J.shape}")
-        print(f"dJ.shape = {dJ.shape}")
-        print(f"vc.shape = {vc.shape}")
-        print(f"dvc.shape = {dvc.shape}")
+            xold2 = xold1.copy()
+            xold1 = xval.copy()
+            xval = xmma.copy()
 
-        J, dJ, vc, dvc = np.array(J), np.array(dJ), np.array(vc), np.array(dvc)
+            mma.registerMMAIter(xval, xold1, xold2)
+            p = xval.reshape(p.shape)  # 更新控制参数
 
-        start = time.time()
+            end = time.time()
 
-        mma.setObjectiveWithGradient(J, dJ)
-        mma.setConstraintWithGradient(vc, dvc)
-        mma.mmasub(xval)
-        xmma, _, _ = mma.getOptimalValues()
+            time_elapsed = end - start
 
-        xold2 = xold1.copy()
-        xold1 = xval.copy()
-        xval = xmma.copy()
-
-        mma.registerMMAIter(xval, xold1, xold2)
-        p = xval.reshape(p.shape)  # 更新控制参数
-
-        end = time.time()
-
-        time_elapsed = end - start
-
-        print(f"MMA took {time_elapsed} [s]")
-        print(f'Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n\n')
+            print(f"MMA took {time_elapsed} [s]")
+            print(f'Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n\n')
 
     return p

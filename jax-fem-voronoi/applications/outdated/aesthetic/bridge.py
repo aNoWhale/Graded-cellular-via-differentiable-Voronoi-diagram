@@ -139,7 +139,7 @@ numConstraints = 1
 def objectiveHandleCompliance(rho):
     """MMA solver requires (J, dJ) as inputs
     J has shape ()
-    dJ has shape (...) = rho.shape
+    dJ has shape (...) = p.shape
     """
     J_to, dJ_to = jax.value_and_grad(J_total)(rho)
     output_sol(rho, J_to)

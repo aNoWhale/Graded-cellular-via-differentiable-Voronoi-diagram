@@ -56,8 +56,8 @@ def compute_filter_kd_tree(problem):
     return H, Hs
 
 
-# def applySensitivityFilter(ft, rho, dJ, dvc):
-#     dJ = np.matmul(ft['H'], rho*dJ/np.maximum(1e-3, rho)/ft['Hs'][:, None])
+# def applySensitivityFilter(ft, p, dJ, dvc):
+#     dJ = np.matmul(ft['H'], p*dJ/np.maximum(1e-3, p)/ft['Hs'][:, None])
 #     return dJ, dvc
 
 
