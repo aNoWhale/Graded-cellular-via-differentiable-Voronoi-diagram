@@ -34,7 +34,7 @@ class Elasticity(Problem):
             # Plane stress assumption
             # Reference: https://en.wikipedia.org/wiki/Hooke%27s_law
             Emax = 70.e3
-            Emin = 1e-3 * Emax
+            Emin = 1e-5 * Emax
             nu = 0.3
             penal = 1.
             E = Emin + (Emax - Emin) * theta[0] ** penal
@@ -53,7 +53,7 @@ class Elasticity(Problem):
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([0., -200.])
+            return np.array([-200., 0.])
 
         return [surface_map]
 
@@ -125,7 +125,8 @@ def fixed_location(point):
 
 
 def load_location(point):
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0., atol=0.1 * Ly + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5),
+                          np.logical_and(np.less(point[1],35),np.greater(point[1],15)))
 
 def dirichlet_val(point):
     return 0.
@@ -156,9 +157,9 @@ def J_total(params):
     """
     # J(u(theta), theta)
     sol_list = fwd_pred(params)
-    # compliance = problem.compute_compliance(sol_list[0])
-    """计算差方"""
-    compliance = problem.compute_compliance_target(sol_list[0],target=0)
+    compliance = problem.compute_compliance(sol_list[0])
+    """指定目标"""
+    # compliance = problem.compute_compliance_target(sol_list[0],target=0)
     return compliance
 
 
@@ -241,7 +242,18 @@ def generate_points(Nx, Ny, sx,sy):
 sites = generate_points(Nx, Ny, 10,3)
 time_start=time.time()
 
-optimizationParams = {'maxIters': 349, 'movelimit': 0.5,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,"Nx":Nx,"Ny":Ny,"margin":margin,"heaviside":True,"cauchy":True}
+sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
+sites_up = np.tile(np.array([Nx + margin, Ny + margin]),(sites_num, 1))
+Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
+Dm_up = np.tile(np.array([[3, 3], [3, 3]]), (sites_low.shape[0], 1, 1))
+cauchy_points_low = sites_low
+cauchy_points_up = sites_up
+bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cauchy_points_low)), axis=0)[:, None]
+bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_points_up)), axis=0)[:, None]
+
+optimizationParams = {'maxIters': 349, 'movelimit': 0.1,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,
+                      "Nx":Nx,"Ny":Ny,"margin":margin,"heaviside":True,"cauchy":True,"bound_low":bound_low,"bound_up":bound_up}
+
 problem.op=optimizationParams
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cauchy_points=sites.copy()

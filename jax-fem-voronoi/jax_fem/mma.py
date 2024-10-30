@@ -430,24 +430,16 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
 def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,generate_rho):
     H, Hs = compute_filter_kd_tree(fe) # related with rho
     ft = {'H': H, 'Hs': Hs}
-    p = p_ini
-
+    p=p_ini
     m = numConstraints
     n = len(p.reshape(-1))
 
     mma = MMA()
     mma.setNumConstraints(numConstraints)
     mma.setNumDesignVariables(n)
-    margin=optimizationParams['margin']
-    """ change p boundary here"""
-    sites_low=np.tile(np.array([0-margin,0-margin]),(optimizationParams["sites_num"],1))
-    sites_up = np.tile(np.array([optimizationParams["Nx"]+ margin, optimizationParams["Ny"]+ margin]), (optimizationParams["sites_num"],1))
-    Dm_low=np.tile(np.array([[0,0],[0,0]]), (sites_low.shape[0], 1, 1))
-    Dm_up=np.tile(np.array([[3,3],[3,3]]), (sites_low.shape[0], 1, 1))
-    cauchy_points_low=sites_low
-    cauchy_points_up=sites_up
-    bound_low=np.concatenate((np.ravel(sites_low),np.ravel(Dm_low),np.ravel(cauchy_points_low)),axis=0)[:,None]
-    bound_up=np.concatenate((np.ravel(sites_up),np.ravel(Dm_up),np.ravel(cauchy_points_up)),axis=0)[:,None]
+
+    bound_low=optimizationParams["bound_low"][optimizationParams["paras_at"][0]:optimizationParams["paras_at"][1]] if "paras_at" in optimizationParams else optimizationParams["bound_low"]
+    bound_up=optimizationParams["bound_up"][optimizationParams["paras_at"][0]:optimizationParams["paras_at"][1]] if "paras_at" in optimizationParams else optimizationParams["bound_up"]
     mma.setMinandMaxBoundsForDesignVariables(bound_low,bound_up)
 
     xval = p.reshape(-1)[:, None]
@@ -462,16 +454,18 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
             loop += 1
             pbar.update(1)
             print(f"MMA solver...")
-            rho = generate_rho(optimizationParams, p,epoch=loop)
+
+            rho = generate_rho(optimizationParams, p, epoch=loop)
             rho=rho.flatten()[:, None]
             assert rho.shape[1]==1
             J, dJ = objectiveHandle(rho) # get from rho = fun(p)
-            vc, dvc = consHandle(rho, loop) # get from rho
+            vc, dvc = consHandle(rho) # get from rho
 
             dJ_drho, dvc_drho = applySensitivityFilter(ft, rho, dJ, dvc)
-            def rho_faltten(op,p,epoch):
+            def rho_faltten(op, p,epoch):
                 fl=generate_rho(op,p,epoch=epoch).flatten()
                 return fl
+            """这里控制着对哪个参数求导"""
             drho_dp = jax.jacfwd(rho_faltten, argnums=1)(optimizationParams, p,epoch=loop)
             dJ= np.dot(dJ_drho.T, drho_dp)
             dvc = np.dot(dvc_drho.squeeze().T, drho_dp)

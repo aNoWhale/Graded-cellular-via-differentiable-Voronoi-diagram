@@ -1,4 +1,6 @@
 # Import some useful modules.
+import time
+
 import numpy as onp
 import jax
 import jax.numpy as np
@@ -12,27 +14,30 @@ from jax_fem.solver import solver, ad_wrapper
 from jax_fem.utils import save_sol
 from jax_fem.generate_mesh import get_meshio_cell_type, Mesh, rectangle_mesh
 from jax_fem.mma import optimize
-
 # Define constitutive relationship.
 # Generally, JAX-FEM solves -div.(f(u_grad,alpha_1,alpha_2,...,alpha_N)) = b.
 # Here, we have f(u_grad,alpha_1,alpha_2,...,alpha_N) = sigma(u_grad, theta),
 # reflected by the function 'stress'. The functions 'custom_init'and 'set_params'
 # override base class methods. In particular, set_params sets the design variable theta.
+
+from softVoronoi import generate_voronoi
+from src.softVoronoi import generate_voronoi_separate
+
+
 class Elasticity(Problem):
     def custom_init(self):
         # Override base class method.
         # Set up 'self.fe.flex_inds' so that location-specific TO can be realized.
         self.fe = self.fes[0]
         self.fe.flex_inds = np.arange(len(self.fe.cells))
-
     def get_tensor_map(self):
         def stress(u_grad, theta):
             # Plane stress assumption
             # Reference: https://en.wikipedia.org/wiki/Hooke%27s_law
             Emax = 70.e3
-            Emin = 1e-3 * Emax
+            Emin = 1e-5 * Emax
             nu = 0.3
-            penal = 3.
+            penal = 1.
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -48,18 +53,19 @@ class Elasticity(Problem):
 
     def get_surface_maps(self):
         def surface_map(u, x):
-            return np.array([0., 100.])
+            # load define
+            return np.array([0., -200.])
 
         return [surface_map]
 
     def set_params(self, params):
         # Override base class method.
+        """edited from tianxu xue"""
         full_params = np.ones((self.fe.num_cells, params.shape[1]))
         full_params = full_params.at[self.fe.flex_inds].set(params)
         thetas = np.repeat(full_params[:, None, :], self.fe.num_quads, axis=1)
         self.full_params = full_params
         self.internal_vars = [thetas]
-
     def compute_compliance(self, sol):
         # Surface integral
         boundary_inds = self.boundary_inds_list[0]
@@ -69,11 +75,8 @@ class Elasticity(Problem):
                                                                           :, :, :, None]
         u_face = np.sum(u_face, axis=2)  # (num_selected_faces, num_face_quads, vec)
         # (num_cells, num_faces, num_face_quads, dim) -> (num_selected_faces, num_face_quads, dim)
-
         # subset_quad_points = self.get_physical_surface_quad_points(boundary_inds)
-
         subset_quad_points = self.physical_surface_quad_points[0]
-
         neumann_fn = self.get_surface_maps()[0]
         traction = -jax.vmap(jax.vmap(neumann_fn))(u_face,
                                                    subset_quad_points)  # (num_selected_faces, num_face_quads, vec)
@@ -81,6 +84,8 @@ class Elasticity(Problem):
         return val
 
 
+
+######################################################################
 # Do some cleaning work. Remove old solution files.
 data_path = os.path.join(os.path.dirname(__file__), 'data')
 files = glob.glob(os.path.join(data_path, f'vtk/*'))
@@ -90,8 +95,12 @@ for f in files:
 # Specify mesh-related information. We use first-order quadrilateral element.
 ele_type = 'QUAD4'
 cell_type = get_meshio_cell_type(ele_type)
-Lx, Ly = 60., 30.
-meshio_mesh = rectangle_mesh(Nx=60, Ny=30, domain_x=Lx, domain_y=Ly)
+
+Nx = 100
+Ny = 50
+Lx, Ly = 100., 50.
+
+meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
 mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
 
 
@@ -101,8 +110,7 @@ def fixed_location(point):
 
 
 def load_location(point):
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0., atol=0.1 * Ly + 1e-5))
-
+    return np.logical_and( np.isclose(point[0], Lx, atol=1e-5),np.isclose(point[1], 0., atol=0.1 * Ly+1e-5))
 
 def dirichlet_val(point):
     return 0.
@@ -115,6 +123,8 @@ location_fns = [load_location]
 # Define forward problem.
 problem = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
                      location_fns=location_fns)
+
+
 
 # Apply the automatic differentiation wrapper.
 # This is a critical step that makes the problem solver differentiable.
@@ -132,6 +142,8 @@ def J_total(params):
     # J(u(theta), theta)
     sol_list = fwd_pred(params)
     compliance = problem.compute_compliance(sol_list[0])
+    """指定目标"""
+    # compliance = problem.compute_compliance_target(sol_list[0],target=0)
     return compliance
 
 
@@ -146,7 +158,7 @@ def output_sol(params, obj_val):
     vtu_path = os.path.join(data_path, f'vtk/sol_{output_sol.counter:03d}.vtu')
     save_sol(problem.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
              cell_infos=[('theta', problem.full_params[:, 0])])
-    print(f"compliance = {obj_val}")
+    print(f"compliance or var = {obj_val}")
     outputs.append(obj_val)
     output_sol.counter += 1
 
@@ -155,35 +167,35 @@ output_sol.counter = 0
 
 
 # Prepare J_total and dJ/d(theta) that are required by the MMA optimizer.
-def objectiveHandle(rho):
+def objectiveHandle(p):
     """
     定义目标函数和梯度计算 (MMA 使用)
-    :param rho:
+    :param p:
     :return:
     """
     # MMA solver requires (J, dJ) as inputs
     # J has shape ()
     # dJ has shape (...) = p.shape
-    J, dJ = jax.value_and_grad(J_total)(rho)
-    output_sol(rho, J)
+    J, dJ = jax.value_and_grad(J_total)(p)
+    output_sol(p, J)
     return J, dJ
 
 
 # Prepare g and dg/d(theta) that are required by the MMA optimizer.
-def consHandle(rho, epoch):
+def consHandle(rho):
     """
     定义约束
-    :param rho:
-    :param epoch:
+    :rho:
     :return:
     """
     # MMA solver requires (c, dc) as inputs
     # c should have shape (numConstraints,)
     # dc should have shape (numConstraints, ...)
     def computeGlobalVolumeConstraint(rho):
+        # thetas = generate_voronoi(op, p)
+        # thetas = thetas.reshape(-1, 1)
         g = np.mean(rho) / vf - 1.
         return g
-
     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
     c, gradc = c.reshape((1,)), gradc[None, ...]
     return c, gradc
@@ -191,12 +203,59 @@ def consHandle(rho, epoch):
 
 # Finalize the details of the MMA optimizer, and solve the TO problem.
 vf = 0.5
-optimizationParams = {'maxIters': 51, 'movelimit': 0.1}
-rho_ini = vf * np.ones((len(problem.fe.flex_inds), 1))
-numConstraints = 1
-optimize(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle, numConstraints)
-print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
 
+
+
+
+sites_num=30
+dim=2
+margin=0
+coordinates = np.indices((Nx, Ny))
+
+def generate_points(Nx, Ny, sx,sy):
+    # uniform points in 0,Nx 0,Ny
+    x = np.linspace(0-margin, Nx+margin, sx)
+    y = np.linspace(0-margin, Ny+margin, sy)
+    points=np.meshgrid(x, y)
+    xa=points[0].flatten()
+    ya=points[1].flatten()
+    points=np.column_stack((xa, ya))
+    return points
+
+
+sites = generate_points(Nx, Ny, 10,3)
+time_start=time.time()
+
+sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
+sites_up = np.tile(np.array([Nx + margin, Ny + margin]),(sites_num, 1))
+Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
+Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
+cauchy_points_low = sites_low
+cauchy_points_up = sites_up
+bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cauchy_points_low)), axis=0)[:, None]
+bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_points_up)), axis=0)[:, None]
+
+
+
+
+Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+cauchy_points=sites.copy()
+numConstraints = 1
+optimizationParams = {'maxIters': 249, 'movelimit': 0.1,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,
+                      "Nx":Nx,"Ny":Ny,"margin":margin,
+                      "heaviside":True,"cauchy":False,
+                      "bound_low":bound_low,"bound_up":bound_up,"paras_at":(0,sites_num*6),
+                      "cauchy_points":cauchy_points,"immortal":["cauchy_points"]}
+
+problem.op=optimizationParams
+# p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
+p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
+
+optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,generate_voronoi_separate)
+
+
+print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
+print(f"running time:{time.time() - time_start}")
 # Plot the optimization results.
 obj = onp.array(outputs)
 plt.figure(figsize=(10, 8))
