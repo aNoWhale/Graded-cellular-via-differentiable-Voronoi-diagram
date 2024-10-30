@@ -1,4 +1,6 @@
 # Import some useful modules.
+import time
+
 import numpy as onp
 import jax
 import jax.numpy as np
@@ -57,14 +59,7 @@ class Elasticity(Problem):
 
     def set_params(self, params):
         # Override base class method.
-        # full_params = np.ones((self.fe.num_cells, params.shape[0]))
-        # full_params = full_params.at[self.fe.flex_inds].set(params)
-        # thetas = generate_voronoi(self.op, params)
-        # thetas = thetas.reshape(-1, 1)
-        # theta = np.repeat(thetas[:, None, :], self.fe.num_quads, axis=1)
-        # self.full_params = full_params
-        # self.internal_vars = [theta]
-        """from tianxu xue"""
+        """edited from tianxu xue"""
         full_params = np.ones((self.fe.num_cells, params.shape[1]))
         full_params = full_params.at[self.fe.flex_inds].set(params)
         thetas = np.repeat(full_params[:, None, :], self.fe.num_quads, axis=1)
@@ -79,15 +74,29 @@ class Elasticity(Problem):
                                                                           :, :, :, None]
         u_face = np.sum(u_face, axis=2)  # (num_selected_faces, num_face_quads, vec)
         # (num_cells, num_faces, num_face_quads, dim) -> (num_selected_faces, num_face_quads, dim)
-
         # subset_quad_points = self.get_physical_surface_quad_points(boundary_inds)
-
         subset_quad_points = self.physical_surface_quad_points[0]
-
         neumann_fn = self.get_surface_maps()[0]
         traction = -jax.vmap(jax.vmap(neumann_fn))(u_face,
                                                    subset_quad_points)  # (num_selected_faces, num_face_quads, vec)
         val = np.sum(traction * u_face * nanson_scale[:, :, None])
+        return val
+    def compute_compliance_target(self, sol,target=0):
+        # Surface integral
+        boundary_inds = self.boundary_inds_list[0]
+        _, nanson_scale = self.fe.get_face_shape_grads(boundary_inds)
+        # (num_selected_faces, 1, num_nodes, vec) * # (num_selected_faces, num_face_quads, num_nodes, 1)
+        u_face = sol[self.fe.cells][boundary_inds[:, 0]][:, None, :, :] * self.fe.face_shape_vals[boundary_inds[:, 1]][
+                                                                          :, :, :, None]
+        u_face = np.sum(u_face, axis=2)  # (num_selected_faces, num_face_quads, vec)
+        # (num_cells, num_faces, num_face_quads, dim) -> (num_selected_faces, num_face_quads, dim)
+        # subset_quad_points = self.get_physical_surface_quad_points(boundary_inds)
+        subset_quad_points = self.physical_surface_quad_points[0]
+        neumann_fn = self.get_surface_maps()[0]
+        traction = -jax.vmap(jax.vmap(neumann_fn))(u_face,
+                                                   subset_quad_points)  # (num_selected_faces, num_face_quads, vec)
+        val = np.sum(traction * u_face * nanson_scale[:, :, None])
+        val= np.abs(val-target)
         return val
 
 
@@ -147,7 +156,9 @@ def J_total(params):
     """
     # J(u(theta), theta)
     sol_list = fwd_pred(params)
-    compliance = problem.compute_compliance(sol_list[0])
+    # compliance = problem.compute_compliance(sol_list[0])
+    """计算差方"""
+    compliance = problem.compute_compliance_target(sol_list[0],target=0)
     return compliance
 
 
@@ -162,7 +173,7 @@ def output_sol(params, obj_val):
     vtu_path = os.path.join(data_path, f'vtk/sol_{output_sol.counter:03d}.vtu')
     save_sol(problem.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
              cell_infos=[('theta', problem.full_params[:, 0])])
-    print(f"compliance = {obj_val}")
+    print(f"compliance or var = {obj_val}")
     outputs.append(obj_val)
     output_sol.counter += 1
 
@@ -228,8 +239,9 @@ def generate_points(Nx, Ny, sx,sy):
 
 
 sites = generate_points(Nx, Ny, 10,3)
+time_start=time.time()
 
-optimizationParams = {'maxIters': 200, 'movelimit': 0.1,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,"Nx":Nx,"Ny":Ny,"margin":margin}
+optimizationParams = {'maxIters': 349, 'movelimit': 0.5,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,"Nx":Nx,"Ny":Ny,"margin":margin,"heaviside":True,"cauchy":True}
 problem.op=optimizationParams
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cauchy_points=sites.copy()
@@ -240,7 +252,7 @@ numConstraints = 1
 
 optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,generate_voronoi)
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
-
+print(f"running time:{time.time() - time_start}")
 # Plot the optimization results.
 obj = onp.array(outputs)
 plt.figure(figsize=(10, 8))
