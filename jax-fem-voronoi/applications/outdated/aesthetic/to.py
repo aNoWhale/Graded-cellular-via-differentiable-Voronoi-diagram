@@ -90,7 +90,7 @@ def fixed_location(point):
     flag3 = point[0] <= 0.55*args.Lx
     return flag1 & flag2 & flag3
     
-# def load_location(point):
+# def location_fns(point):
 #     return np.logical_and(np.isclose(point[0], args.Lx, atol=1e-5), np.isclose(point[1], 0., atol=0.1*args.Ly + 1e-5))
 
 def load_location(point):
