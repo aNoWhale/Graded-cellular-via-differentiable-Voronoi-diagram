@@ -1,8 +1,9 @@
 import time
-import numpy as onp
-import jax.numpy as np
+import numpy as np
 from matplotlib import pyplot as plt
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import pyvista as pv
 
 def heaviside_projection(field, eta=0.5, epoch=0):
     gamma = 2 ** (epoch // 50)
@@ -18,8 +19,6 @@ def batch_softmax(matrices):  # 形状 (1, 100, 100)
     return soft
 
 
-def relu(x, y=0.):
-    return np.maximum(y, x)
 
 
 def d_euclidean(x, xm):
@@ -49,14 +48,6 @@ def d_mahalanobis(x, xm, Dm):
     return dist_matrix
 
 
-def d_sigmoid(field, sites, **kwargs):
-    def sigmoid_t(z, move=0):
-        return 1 / (1 + np.exp(-z + move))
-
-    dist = d_euclidean(field, sites)  # Ns*n*n
-    # dist=np.sum(dist_field[np.newaxis,:,:,:]-sites[:,np.newaxis,np.newaxis,:],axis=-1)#n*n*dim Ns*dim -> Ns*n*n*dim ->Ns*n*n
-    dist_sig = dist * sigmoid_t(dist) * 2  # Ns*n*n
-    return dist_sig
 
 
 def cauchy_mask(dist_field, point: np.array, mask_field,gamma=5,scale=10,**kwargs):
@@ -77,16 +68,14 @@ def cauchy_mask(dist_field, point: np.array, mask_field,gamma=5,scale=10,**kwarg
 
 
 def voronoi_field(field, sites, **kwargs):
+
     if "Dm" in kwargs:
         dist = d_mahalanobis(field, sites, kwargs["Dm"])
+
     else:
         dist = d_euclidean(field, sites)  # Nc,r,c
     if "cauchy_field" in kwargs and "cauchy_points" in kwargs:
-        if "Dm" in kwargs:
-            Dm_inv = np.array([np.linalg.inv(kwargs["Dm"][i]) for i in range(kwargs["Dm"].shape[0])])
-            dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"],Dm=Dm_inv)
-        else:
-            dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
+        dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
     soft = batch_softmax(dist)
     beta = 5
     rho = 1 - np.sum(soft ** beta, axis=0)
@@ -166,8 +155,8 @@ def generate_gene_random(op, Nx, Ny) -> np.ndarray:
     sites_num = op["sites_num"]
     margin = op["margin"]
     sites = np.ones((sites_num, 2))
-    sites[:, 0] = onp.random.randint(low=0 - margin, high=Nx + margin, size=sites_num)
-    sites[:, 1] = onp.random.randint(low=0 - margin, high=Ny + margin, size=sites_num)
+    sites[:, 0] = np.random.randint(low=0 - margin, high=Nx + margin, size=sites_num)
+    sites[:, 1] = np.random.randint(low=0 - margin, high=Ny + margin, size=sites_num)
     Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     cauchy_points = sites.copy()
     p = np.concatenate((np.ravel(sites), np.ravel(Dm), np.ravel(cauchy_points)),
@@ -183,26 +172,46 @@ if __name__ == '__main__':
     coordinates = np.stack(coords, axis=-1)
     cauchy_field = coordinates.copy()
 
-    # sites=np.array(([20,50],[80,50]))
-    # cauchy_points=np.array(([40,20],[50,70]))
-
-    sites = onp.random.randint(low=-20, high=120, size=(20, 2))
-    cauchy_points = sites.copy()
-    cauchy_points = cauchy_points + onp.random.normal(loc=0, scale=10, size=cauchy_points.shape)
+    sites=np.array(([20,50],[80,50],[50,80]))
+    cauchy_points=np.array(([40,50],[80,50],[50,80]))
+    np.random.seed(0)
+    # sites = np.random.randint(low=0, high=100, size=(5, 2))
+    # cauchy_points = sites.copy()
+    # cauchy_points = cauchy_points+cauchy_points *np.random.normal(loc=0, scale=1, size=cauchy_points.shape)
 
     Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     Dm[0] = np.array(([1, 0], [0, 1]))
 
-    # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
-    # field=voronoi_field(coordinates, sites, Dm=Dm)
-    field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    plotter = pv.Plotter()
+    X = np.arange(coordinates.shape[0])
+    Y = np.arange(coordinates.shape[1])
+    X, Y = np.meshgrid(X, Y)
+
+    dist = d_mahalanobis(coordinates, sites, Dm)
+    Dm_inv = np.array([np.linalg.inv(Dm[i]) for i in range(Dm.shape[0])])
+    """这个Dm_inv很重要"""
+    """或许可以尝试一下，将cauchymask的方向改为朝下，（1，scale）->(缺个这个映射关系,1)"""
+    dist = cauchy_mask(dist, cauchy_points, cauchy_field,gamma=5,scale=10,Dm=Dm_inv)
+    for i in range(len(dist)):
+        di=dist[i]
+        points = np.vstack((X.ravel(), Y.ravel(), di.ravel())).T
+        grid = pv.StructuredGrid(X, Y, di)
+        plotter.add_mesh(grid, scalars=di.ravel(), cmap='viridis')
+        # ax.plot_surface(X, Y, di, cmap='viridis')
+
+
+    soft = batch_softmax(dist)
+    beta = 5
+    rho = 1 - np.sum(soft ** beta, axis=0)
+    rho_h=heaviside_projection(rho,eta=0.5, epoch=100)
+    grid_rho = pv.StructuredGrid(X, Y, rho_h*-10-10)
+    plotter.add_mesh(grid_rho, scalars=rho.ravel(), cmap='Greys',opacity=0.5)
+
 
     print(f"代码运行时间：{time.time() - start_time:.6f} 秒")
+    plotter.add_axes()
+    plotter.show()
+    # plt.show()
 
-    plt.imshow(field, cmap='viridis')  # 使用 'viridis' 颜色映射
-    plt.colorbar(label='Pixel Value')  # 添加颜色条用于显示值的范围
-    plt.title("Pixel Values Visualized with Colors")
-    plt.scatter(sites[:, 1], sites[:, 0], marker='^', color='r')
-    plt.scatter(cauchy_points[:, 1], cauchy_points[:, 0], marker='+', color='w')
-    print(f"绘图消耗时间：{time.time() - start_time:.6f} 秒")
-    plt.show()

@@ -502,4 +502,4 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
             print(f"MMA took {time_elapsed} [s]")
             print(f'Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n\n')
 
-    return p
+    return p,J

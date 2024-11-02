@@ -31,7 +31,6 @@ class Elasticity(Problem):
         self.fe = self.fes[0]
         self.fe.flex_inds = np.arange(len(self.fe.cells))
         self.target = 0
-
     def get_tensor_map(self):
         def stress(u_grad, theta):
             # Plane stress assumption
@@ -56,7 +55,7 @@ class Elasticity(Problem):
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([0., -200.])
+            return np.array([-200., 0.])
 
         return [surface_map]
 
@@ -68,7 +67,6 @@ class Elasticity(Problem):
         thetas = np.repeat(full_params[:, None, :], self.fe.num_quads, axis=1)
         self.full_params = full_params
         self.internal_vars = [thetas]
-
     def compute_compliance(self, sol):
         # Surface integral
         boundary_inds = self.boundary_inds_list[0]
@@ -84,9 +82,8 @@ class Elasticity(Problem):
         traction = -jax.vmap(jax.vmap(neumann_fn))(u_face,
                                                    subset_quad_points)  # (num_selected_faces, num_face_quads, vec)
         val = np.sum(traction * u_face * nanson_scale[:, :, None])
-        return np.sqrt(np.square(val - self.target))
-
-    def setTarget(self, target):
+        return np.sqrt(np.square(val-self.target))
+    def setTarget(self,target):
         self.target = target
 
 
@@ -115,8 +112,9 @@ def fixed_location(point):
 
 
 def load_location(point):
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0., atol=0.1 * Ly + 1e-5))
-
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5),np.logical_and(
+        np.greater(point[1],0),np.less(point[1],Ly/2)
+    ))
 
 def dirichlet_val(point):
     return 0.
@@ -130,7 +128,8 @@ location_fns = [load_location]
 problem = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
                      location_fns=location_fns)
 problem2 = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
-                      location_fns=location_fns)
+                     location_fns=location_fns)
+
 
 # Apply the automatic differentiation wrapper.
 # This is a critical step that makes the problem solver differentiable.
@@ -153,7 +152,6 @@ def J_total(params):
     # compliance = problem.compute_compliance_target(sol_list[0],target=0)
     return compliance
 
-
 def J_total2(params):
     """
     目标函数
@@ -168,6 +166,7 @@ def J_total2(params):
     return compliance
 
 
+
 # Output solution files to local disk
 outputs = []
 
@@ -178,12 +177,10 @@ def output_sol(params, obj_val):
     sol = sol_list[0]
     vtu_path = os.path.join(data_path, f'vtk/sol_{output_sol.counter:03d}.vtu')
     save_sol(problem.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
-             cell_infos=[('theta', problem.full_params[:, 0])], )
-    # point_infos = [ ("sites", params[0:problem.op["sites_num"] * 2].reshape(problem.op["sites_num"], problem.op["Dm_dim"]))]
+             cell_infos=[('theta', problem.full_params[:, 0])])
     print(f"compliance or var = {obj_val}")
     outputs.append(obj_val)
     output_sol.counter += 1
-
 
 def output_sol2(params, obj_val):
     print(f"\nOutput solution - need to solve the forward problem again...")
@@ -191,12 +188,10 @@ def output_sol2(params, obj_val):
     sol = sol_list[0]
     vtu_path = os.path.join(data_path, f'vtk/sol_{output_sol.counter:03d}.vtu')
     save_sol(problem2.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
-             cell_infos=[('theta', problem2.full_params[:, 0])], )
-    # point_infos = [("sites", params[0:problem2.op["sites_num"] * 2].reshape(problem2.op["sites_num"], problem2.op["Dm_dim"]))]
+             cell_infos=[('theta', problem2.full_params[:, 0])])
     print(f"compliance or var = {obj_val}")
     outputs.append(obj_val)
     output_sol.counter += 1
-
 
 output_sol.counter = 0
 
@@ -214,7 +209,6 @@ def objectiveHandle(p):
     J, dJ = jax.value_and_grad(J_total)(p)
     output_sol(p, J)
     return J, dJ
-
 
 def objectiveHandle2(p):
     """
@@ -237,7 +231,6 @@ def consHandle(rho):
     :rho:
     :return:
     """
-
     # MMA solver requires (c, dc) as inputs
     # c should have shape (numConstraints,)
     # dc should have shape (numConstraints, ...)
@@ -246,7 +239,6 @@ def consHandle(rho):
         # thetas = thetas.reshape(-1, 1)
         g = np.mean(rho) / vf - 1.
         return g
-
     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
     c, gradc = c.reshape((1,)), gradc[None, ...]
     return c, gradc
@@ -255,28 +247,30 @@ def consHandle(rho):
 # Finalize the details of the MMA optimizer, and solve the TO problem.
 vf = 0.5
 
-sites_num = 30
-dim = 2
-margin = 0
+
+
+
+sites_num=30
+dim=2
+margin=0
 coordinates = np.indices((Nx, Ny))
 
-
-def generate_points(Nx, Ny, sx, sy):
+def generate_points(Nx, Ny, sx,sy):
     # uniform points in 0,Nx 0,Ny
-    x = np.linspace(0 - margin, Nx + margin, sx)
-    y = np.linspace(0 - margin, Ny + margin, sy)
-    points = np.meshgrid(x, y)
-    xa = points[0].flatten()
-    ya = points[1].flatten()
-    points = np.column_stack((xa, ya))
+    x = np.linspace(0-margin, Nx+margin, sx)
+    y = np.linspace(0-margin, Ny+margin, sy)
+    points=np.meshgrid(x, y)
+    xa=points[0].flatten()
+    ya=points[1].flatten()
+    points=np.column_stack((xa, ya))
     return points
 
 
-sites = generate_points(Nx, Ny, 10, 3)
-time_start = time.time()
+sites = generate_points(Nx, Ny, 10,3)
+time_start=time.time()
 
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
-sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))
+sites_up = np.tile(np.array([Nx + margin, Ny + margin]),(sites_num, 1))
 Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
 Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
 cauchy_points_low = sites_low
@@ -285,39 +279,40 @@ bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cauc
 bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_points_up)), axis=0)[:, None]
 
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-cauchy_points = sites.copy()
+cauchy_points=sites.copy()
 numConstraints = 1
-optimizationParams = {'maxIters': 249, 'movelimit': 0.1, "coordinates": coordinates, "sites_num": sites_num,
-                      "Dm_dim": dim,
-                      "Nx": Nx, "Ny": Ny, "margin": margin,
-                      "heaviside": True, "cauchy": False,
-                      "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, sites_num * 6),
-                      "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]}
-# "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]
-problem.op = optimizationParams
-# p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
-p_ini = np.concatenate((np.ravel(sites), np.ravel(Dm)), axis=0)  # 1-d array contains flattened: sites,Dm,cauchy points
-p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,
-                     generate_voronoi_separate)
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+# optimizationParams = {'maxIters': 249, 'movelimit': 0.1,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,
+#                       "Nx":Nx,"Ny":Ny,"margin":margin,
+#                       "heaviside":True,"cauchy":False,
+#                       "bound_low":bound_low,"bound_up":bound_up,"paras_at":(0,sites_num*6),
+#                       "cauchy_points":cauchy_points,"immortal":["cauchy_points"]}
+#
+# problem.op=optimizationParams
+# # p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
+# p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
+# p_oped,j=optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,generate_voronoi_separate)
 """"""""""""""""""""""""""""""""""""""""""""""""""
 
-sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
-Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "coordinates": coordinates, "sites_num": sites_num,
-                       "Dm_dim": dim,
-                       "Nx": Nx, "Ny": Ny, "margin": margin,
-                       "heaviside": True, "cauchy": True,
-                       "bound_low": bound_low, "bound_up": bound_up, "paras_at": (sites_num * 6, sites_num * 8),
-                       "sites": sites, "Dm": Dm, "immortal": ["sites", "Dm"]}
-problem2.op = optimizationParams2
-problem.setTarget(j * 1.5)
+
+
+
+# sites=p_oped[0:sites_num*dim].reshape((sites_num, dim))
+# Dm=p_oped[sites_num*dim:].reshape((sites_num,dim,dim))
+optimizationParams2 = {'maxIters': 99, 'movelimit': 0.5,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,
+                      "Nx":Nx,"Ny":Ny,"margin":margin,
+                      "heaviside":True,"cauchy":True,
+                      "bound_low":bound_low,"bound_up":bound_up,"paras_at":(sites_num*6,sites_num*8),
+                      "sites":sites,"Dm":Dm,"immortal":["sites","Dm"]}
+problem2.op=optimizationParams2
+# problem.setTarget(j*1.5)
 cauchy_points=sites.copy()
-p_ini2 = np.ravel(cauchy_points)  # 1-d array contains flattened: sites,Dm,cauchy points
-optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle, numConstraints,
-         generate_voronoi_separate)
+p_ini2= np.ravel(cauchy_points)# 1-d array contains flattened: sites,Dm,cauchy points
+optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle, numConstraints,generate_voronoi_separate)
+
 
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
-print(f"previous J/compliance :{j}")
 print(f"running time:{time.time() - time_start}")
 # Plot the optimization results.
 obj = onp.array(outputs)
