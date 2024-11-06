@@ -216,12 +216,12 @@ if __name__ == '__main__':
     coordinates = np.stack(coords, axis=-1)
     cauchy_field = coordinates.copy()
 
-    sites=np.array(([30,50],[80,50],))
-    cauchy_points=np.array(([70,30],[90,50]))
-    # np.random.seed(0)
-    # sites = np.random.randint(low=0, high=100, size=(10, 2))
-    # cauchy_points = sites.copy()
-    # cauchy_points = cauchy_points+cauchy_points *np.random.normal(loc=0, scale=1, size=cauchy_points.shape)
+    # sites=np.array(([30,50],[80,50],))
+    # cauchy_points=np.array(([70,30],[90,50]))
+    np.random.seed(0)
+    sites = np.random.randint(low=0, high=100, size=(40, 2))
+    cauchy_points = sites.copy()
+    cauchy_points = cauchy_points+cauchy_points *np.random.normal(loc=0, scale=1, size=cauchy_points.shape)
 
     Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     Dm[0] = np.array(([1, 0], [0, 1]))
@@ -230,7 +230,6 @@ if __name__ == '__main__':
     # ax = fig.add_subplot(111, projection='3d')
     plotter = pv.Plotter()
     combined_mesh = pv.UnstructuredGrid()
-
     X = np.arange(coordinates.shape[0])
     Y = np.arange(coordinates.shape[1])
     X, Y = np.meshgrid(X, Y)

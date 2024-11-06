@@ -5,9 +5,16 @@ import numpy as onp
 import jax
 import jax.numpy as np
 import os
+import sys
 import glob
+import matplotlib
+matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
-
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+jax_fem_voronoi_dir = os.path.join(parent_dir, 'jax-fem-voronoi')
+src_dir = os.path.join(parent_dir, 'src')
+sys.path.append(jax_fem_voronoi_dir)
+sys.path.append(src_dir)
 # Import JAX-FEM specific modules.
 from jax_fem.problem import Problem
 from jax_fem.solver import solver, ad_wrapper
@@ -21,8 +28,9 @@ from jax_fem.mma import optimize
 # override base class methods. In particular, set_params sets the design variable theta.
 
 from softVoronoi import generate_voronoi
-from src.softVoronoi import generate_voronoi_separate
-
+from softVoronoi import generate_voronoi_separate, voronoi_field
+plt.ion()
+fig, ax = plt.subplots()
 
 class Elasticity(Problem):
     def custom_init(self):
@@ -36,7 +44,7 @@ class Elasticity(Problem):
         def stress(u_grad, theta):
             # Plane stress assumption
             # Reference: https://en.wikipedia.org/wiki/Hooke%27s_law
-            Emax = 70.e3
+            Emax = 70e3
             Emin = 1e-5 * Emax
             nu = 0.3
             penal = 1.
@@ -231,12 +239,33 @@ def objectiveHandle2(p):
 
 
 # Prepare g and dg/d(theta) that are required by the MMA optimizer.
-def consHandle(rho):
-    """
-    定义约束
-    :rho:
-    :return:
-    """
+# def consHandle(rho):
+#
+#     # MMA solver requires (c, dc) as inputs
+#     # c should have shape (numConstraints,)
+#     # dc should have shape (numConstraints, ...)
+#     def computeGlobalVolumeConstraint(rho):
+#         # thetas = generate_voronoi(op, p)
+#         # thetas = thetas.reshape(-1, 1)
+#         g = np.mean(rho) / vf - 1.
+#         return g
+#
+#     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
+#     c, gradc = c.reshape((1,)), gradc[None, ...]
+#     return c, gradc
+def consHandle1(rho):
+
+    # MMA solver requires (c, dc) as inputs
+    # c should have shape (numConstraints,)
+    # dc should have shape (numConstraints, ...)
+    def computeGlobalVolumeConstraint(rho):
+        g = np.mean(rho) / vf - 1.
+        return g
+
+    c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
+    c, gradc = c.reshape((1,)), gradc[None, ...]
+    return c, gradc
+def consHandle2(p):
 
     # MMA solver requires (c, dc) as inputs
     # c should have shape (numConstraints,)
@@ -246,10 +275,10 @@ def consHandle(rho):
         # thetas = thetas.reshape(-1, 1)
         g = np.mean(rho) / vf - 1.
         return g
-
-    c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
+    c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(p)
     c, gradc = c.reshape((1,)), gradc[None, ...]
     return c, gradc
+
 
 
 # Finalize the details of the MMA optimizer, and solve the TO problem.
@@ -273,12 +302,16 @@ def generate_points(Nx, Ny, sx, sy):
 
 
 sites = generate_points(Nx, Ny, 10, 3)
+# onp.random.seed(0)
+# sites_x = onp.random.randint(low=0, high=Nx, size=(sites_num, 1))
+# sites_y = onp.random.randint(low=0, high=Ny, size=(sites_num, 1))
+# sites=np.concatenate((sites_x, sites_y), axis=-1,dtype=np.float64)
 time_start = time.time()
 
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))
 Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
-Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
+Dm_up = np.tile(np.array([[1, 1], [1, 1]]), (sites_low.shape[0], 1, 1))
 cauchy_points_low = sites_low
 cauchy_points_up = sites_up
 bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cauchy_points_low)), axis=0)[:, None]
@@ -287,7 +320,8 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cauchy_points = sites.copy()
 numConstraints = 1
-optimizationParams = {'maxIters': 49, 'movelimit': 0.1, "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams = {'maxIters': 49, 'movelimit': 0.1, "lastIters":0,"stage":0,
+                      "coordinates": coordinates, "sites_num": sites_num,
                       "Dm_dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
                       "heaviside": True, "cauchy": False,
@@ -297,34 +331,39 @@ optimizationParams = {'maxIters': 49, 'movelimit': 0.1, "coordinates": coordinat
 problem.op = optimizationParams
 # p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
 p_ini = np.concatenate((np.ravel(sites), np.ravel(Dm)), axis=0)  # 1-d array contains flattened: sites,Dm,cauchy points
-p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,
+p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,
                      generate_voronoi_separate)
 """"""""""""""""""""""""""""""""""""""""""""""""""
 
 sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
 Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 49, 'movelimit': 0.5, "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
+                       "coordinates": coordinates, "sites_num": sites_num,
                        "Dm_dim": dim,
                        "Nx": Nx, "Ny": Ny, "margin": margin,
                        "heaviside": True, "cauchy": True,
                        "bound_low": bound_low, "bound_up": bound_up, "paras_at": (sites_num * 6, sites_num * 8),
                        "sites": sites, "Dm": Dm, "immortal": ["sites", "Dm"]}
 problem2.op = optimizationParams2
-problem.setTarget(j * 1.5)
-cauchy_points=sites.copy()
+problem2.setTarget(j * 1.5)
+# cauchy_points=sites.copy()
 p_ini2 = np.ravel(cauchy_points)  # 1-d array contains flattened: sites,Dm,cauchy points
-optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle, numConstraints,
+p_final,j =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)
+
 
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
 print(f"previous J/compliance :{j}")
 print(f"running time:{time.time() - time_start}")
 # Plot the optimization results.
 obj = onp.array(outputs)
-plt.figure(figsize=(10, 8))
-plt.plot(onp.arange(len(obj)) + 1, obj, linestyle='-', linewidth=2, color='black')
-plt.xlabel(r"Optimization step", fontsize=20)
-plt.ylabel(r"Objective value", fontsize=20)
-plt.tick_params(labelsize=20)
-plt.tick_params(labelsize=20)
+fig=plt.figure(figsize=(16, 8))
+ax1=fig.add_subplot(1, 2, 1)
+ax1.plot(onp.arange(len(obj)) + 1, obj, linestyle='-', linewidth=2, color='black')
+ax2=fig.add_subplot(1, 2, 2)
+cauchy_points=p_final.reshape(sites_num, dim)
+coordinates = np.stack(coordinates, axis=-1)
+rho=voronoi_field(coordinates,sites,Dm=Dm,cauchy_points=cauchy_points)
+ax2.scatter(sites[:,0], sites[:,1],marker='o')
+ax2.scatter(cauchy_points[:,0],cauchy_points[:,1],marker='+')
 plt.show()

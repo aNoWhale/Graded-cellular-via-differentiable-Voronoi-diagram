@@ -46,11 +46,40 @@ def d_mahalanobis(x, xm, Dm):
     :return:
     """
     diff = x[np.newaxis, :, :, np.newaxis, :] - xm[:, np.newaxis, np.newaxis, np.newaxis, :]  # Nc*n*n*dim
-    dot1 = np.einsum('ijklm,imn->ijkln', diff, Dm.swapaxes(1, 2))
-    dot2 = np.einsum('imn,ijknl->ijkml', Dm, diff.swapaxes(-1, -2))
-    nor = np.einsum("ijklm,ijkml->ijk", dot1, dot2)
+    # dot1 = np.einsum('ijklm,imn->ijkln', diff, Dm.swapaxes(1, 2))
+    # dot2 = np.einsum('imn,ijknl->ijkml', Dm, diff.swapaxes(-1, -2))
+    # nor = np.einsum("ijklm,ijkml->ijk", dot1, dot2)
+    nor = np.einsum("ijklm,ijkml->ijk", np.einsum('ijklm,imn->ijkln', diff, Dm.swapaxes(1, 2)), np.einsum('imn,ijknl->ijkml', Dm, diff.swapaxes(-1, -2)))
     dist_matrix = np.sqrt(nor)  # Nc*n*n*dim Nc*dim*dim
     return dist_matrix
+
+def normal_distribution(x,mu=0.,sigma=1.):
+    return 1./(sigma*np.sqrt(2*np.pi))*np.exp(-(x-mu)**2/(2*sigma**2))
+
+def d_mahalanobis_masked(x, xm, xs,Dm):
+
+    alot=1e-9
+    diff_xxm = x[np.newaxis, :, :, np.newaxis, :] - xm[:, np.newaxis, np.newaxis, np.newaxis, :]  # Nc*n*n*1*dim
+    # dot1 = np.einsum('ijklm,imn->ijkln', diff_xxm, Dm.swapaxes(1, 2))
+    # dot2 = np.einsum('imn,ijknl->ijkml', Dm, diff_xxm.swapaxes(-1, -2))
+    # nor = np.einsum("ijklm,ijkml->ijk", dot1, dot2)
+    nor = np.einsum("ijklm,ijkml->ijk", np.einsum('ijklm,imn->ijkln', diff_xxm, Dm.swapaxes(1, 2)), np.einsum('imn,ijknl->ijkml', Dm, diff_xxm.swapaxes(-1, -2)))
+    dist_matrix = np.sqrt(nor)+alot  # Nc*n*n
+    norm_v=np.array([[1,0]]) #1*2
+
+    diff_xmxs = xm[:,None,:] - xs[:,None,:] #N*1*dim
+    dot1 = np.einsum('ijk,ikl->ijl', diff_xmxs, Dm.swapaxes(1, 2))
+    dot2 = np.einsum('ijk,ikl->ijl', Dm, diff_xmxs.swapaxes(-1, -2))
+    nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
+    dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
+    cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
+
+    sigma = 1. / 100
+    mu = 1
+    k = 1 / normal_distribution(mu, mu, sigma)*3.
+    cos=normal_distribution(cos,mu=mu,sigma=sigma)*k+1
+    return cos*dist_matrix
+
 
 
 def d_sigmoid(field, sites, **kwargs):
@@ -82,15 +111,19 @@ def cauchy_mask(dist_field, point: np.array, mask_field,gamma=5,scale=10,**kwarg
 
 def voronoi_field(field, sites, **kwargs):
     if "Dm" in kwargs:
-        dist = d_mahalanobis(field, sites, kwargs["Dm"])
+        # dist = d_mahalanobis(field, sites, kwargs["Dm"])
+        if "cauchy_points" in kwargs.keys():
+            dist = d_mahalanobis_masked(field, sites, kwargs["cauchy_points"],kwargs['Dm'])
+        else:
+            dist = d_mahalanobis(field, sites, kwargs["Dm"])
     else:
         dist = d_euclidean(field, sites)  # Nc,r,c
-    if "cauchy_field" in kwargs and "cauchy_points" in kwargs:
-        if "Dm" in kwargs:
-            Dm_inv = np.array([np.linalg.inv(kwargs["Dm"][i]) for i in range(kwargs["Dm"].shape[0])])
-            dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"],Dm=Dm_inv)
-        else:
-            dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
+    # if "cauchy_field" in kwargs and "cauchy_points" in kwargs:
+    #     if "Dm" in kwargs:
+    #         Dm_inv = np.array([np.linalg.inv(kwargs["Dm"][i]) for i in range(kwargs["Dm"].shape[0])])
+    #         dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"],Dm=Dm_inv)
+    #     else:
+    #         dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
     soft = batch_softmax(dist,etas=kwargs["etas"] if "etas" in kwargs.keys() else None)
     beta = 5
     rho = 1 - np.sum(soft ** beta, axis=0)
@@ -135,6 +168,7 @@ def generate_voronoi_separate(para, p, **kwargs):
     coordinates = para["coordinates"]
     sites_num = para["sites_num"]
     Dm_dim = para["Dm_dim"]
+    # kwargs["etas"]=1e-20
 
     shapes = [(sites_num, Dm_dim), (sites_num, Dm_dim, Dm_dim), (sites_num, Dm_dim)]
     sites_len = (shapes[0][0] * shapes[0][1]) if "sites" not in para else 0
@@ -158,11 +192,6 @@ def generate_voronoi_separate(para, p, **kwargs):
 
     if "heaviside" in para and para["heaviside"] is True:
         field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
-    # plt.imshow(field, cmap='viridis')  # 使用 'viridis' 颜色映射
-    # plt.colorbar(label='Pixel Value')  # 添加颜色条用于显示值的范围
-    # plt.scatter(sites[:,1],sites[:,0],c='r')
-    # plt.title("Pixel Values Visualized with Colors")
-    # plt.show()
     return field
 
 

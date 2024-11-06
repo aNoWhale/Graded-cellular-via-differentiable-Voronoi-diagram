@@ -18,7 +18,7 @@ import scipy
 
 from jax import config
 from tqdm import tqdm
-
+import matplotlib.pyplot as plt
 config.update("jax_enable_x64", True)
 
 
@@ -456,9 +456,17 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
             print(f"MMA solver...")
 
             rho = generate_rho(optimizationParams, p, epoch=loop)
+
+            plt.clf()
+            plt.imshow(rho.T,cmap='viridis')
+            plt.title(f"loop:{loop+optimizationParams['lastIters']}/{optimizationParams['maxIters']+optimizationParams['lastIters']}")
+            plt.draw()
+            plt.pause(0.01)
+
             rho=rho.flatten()[:, None]
             assert rho.shape[1]==1
             J, dJ = objectiveHandle(rho) # get from rho = fun(p)
+            # vc, dvc = consHandle(rho) # get from rho
             vc, dvc = consHandle(rho) # get from rho
 
             dJ_drho, dvc_drho = applySensitivityFilter(ft, rho, dJ, dvc)
