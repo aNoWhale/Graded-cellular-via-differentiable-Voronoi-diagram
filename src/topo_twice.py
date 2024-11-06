@@ -287,7 +287,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cauchy_points = sites.copy()
 numConstraints = 1
-optimizationParams = {'maxIters': 249, 'movelimit': 0.1, "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams = {'maxIters': 49, 'movelimit': 0.1, "coordinates": coordinates, "sites_num": sites_num,
                       "Dm_dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
                       "heaviside": True, "cauchy": False,
@@ -303,7 +303,7 @@ p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, con
 
 sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
 Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams2 = {'maxIters': 49, 'movelimit': 0.5, "coordinates": coordinates, "sites_num": sites_num,
                        "Dm_dim": dim,
                        "Nx": Nx, "Ny": Ny, "margin": margin,
                        "heaviside": True, "cauchy": True,

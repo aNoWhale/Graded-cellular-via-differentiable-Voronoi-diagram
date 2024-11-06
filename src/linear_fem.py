@@ -37,10 +37,11 @@ def linear_fem(Nx, Ny, Lx, Ly, optimizationParams, p, filename, load:np.array, l
             def stress(u_grad, theta):
                 # Plane stress assumption
                 # Reference: https://en.wikipedia.org/wiki/Hooke%27s_law
-                Emax = 70.e3
-                Emin = 1e-3 * Emax
+                # Emax = 70.e3
+                Emax = 1
+                Emin = 1e-9 * Emax
                 nu = 0.3
-                penal = 3.
+                penal = 1.
                 E = Emin + (Emax - Emin) * theta[0] ** penal
                 epsilon = 0.5 * (u_grad + u_grad.T)
                 eps11 = epsilon[0, 0]
@@ -131,9 +132,9 @@ def linear_fem(Nx, Ny, Lx, Ly, optimizationParams, p, filename, load:np.array, l
     # (num_cells, bnum_quads, 1, 1) * (num_cells, num_quads, vec, dim)
     # -> (num_cells, num_quads, vec, dim)
     Emax = 70.e3
-    Emin = 1e-3 * Emax
+    Emin = 1e-9 * Emax
     nu = 0.3
-    penal = 3.
+    penal = 1.
     E = (Emin + (Emax - Emin) * thetas ** penal)
     eps11 = epsilon[:,:,0, 0]
     eps22 = epsilon[:,:,1, 1]

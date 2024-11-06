@@ -37,8 +37,9 @@ class Elasticity(Problem):
         def stress(u_grad, theta):
             # Plane stress assumption
             # Reference: https://en.wikipedia.org/wiki/Hooke%27s_law
-            Emax = 70.e3
-            Emin = 1e-5 * Emax
+            # Emax = 70.e3
+            Emax = 1
+            Emin = 1e-9 * Emax
             nu = 0.3
             penal = 1.
             E = Emin + (Emax - Emin) * theta[0] ** penal
@@ -130,8 +131,7 @@ location_fns = [load_location]
 # Define forward problem.
 problem = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
                      location_fns=location_fns)
-problem2 = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
-                      location_fns=location_fns)
+
 
 # Apply the automatic differentiation wrapper.
 # This is a critical step that makes the problem solver differentiable.
@@ -219,7 +219,7 @@ def consHandle(rho):
 # Finalize the details of the MMA optimizer, and solve the TO problem.
 vf = 0.5
 
-sites_num = 30
+sites_num = 20
 dim = 2
 margin = 0
 coordinates = np.indices((Nx, Ny))
@@ -236,7 +236,7 @@ def generate_points(Nx, Ny, sx, sy):
     return points
 
 
-sites = generate_points(Nx, Ny, 10, 3)
+sites = generate_points(Nx, Ny, 5, 4)
 time_start = time.time()
 
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
@@ -251,7 +251,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cauchy_points = sites.copy()
 numConstraints = 1
-optimizationParams = {'maxIters': 1, 'movelimit': 0.1, "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams = {'maxIters': 249, 'movelimit': 0.1, "coordinates": coordinates, "sites_num": sites_num,
                       "Dm_dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,"Lx": Lx, "Ly": Ly,
                       "heaviside": True, "cauchy": False,
@@ -277,7 +277,7 @@ def construction():
 
 sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
 Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 49, 'movelimit': 0.5, "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams2 = {'maxIters': 299, 'movelimit': 0.5, "coordinates": coordinates, "sites_num": sites_num,
                        "Dm_dim": dim,"topo_i":optimizationParams["maxIters"],
                        "Nx": Nx, "Ny": Ny, "margin": margin,"Lx": Lx, "Ly": Ly,
                        "heaviside": True, "cauchy": True,

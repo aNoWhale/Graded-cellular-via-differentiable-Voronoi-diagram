@@ -11,8 +11,12 @@ def heaviside_projection(field, eta=0.5, epoch=0):
     return field
 
 
-def batch_softmax(matrices):  # 形状 (1, 100, 100)
+def batch_softmax(matrices,**kwargs):  # 形状 (1, 100, 100)
     exp_matrices = np.exp(-1 * matrices)  # (2,100,100)
+    if "etas" in kwargs:
+        if kwargs["etas"] is not None:
+            s0=np.full_like(exp_matrices[0,:,:], kwargs["etas"],)
+            exp_matrices=np.concatenate((exp_matrices, s0[None,:]), axis=0)
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 形状 (1, 100, 100)
     soft = exp_matrices / sum_vals
     return soft
@@ -87,7 +91,7 @@ def voronoi_field(field, sites, **kwargs):
             dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"],Dm=Dm_inv)
         else:
             dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
-    soft = batch_softmax(dist)
+    soft = batch_softmax(dist,etas=kwargs["etas"] if "etas" in kwargs.keys() else None)
     beta = 5
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
@@ -148,9 +152,9 @@ def generate_voronoi_separate(para, p, **kwargs):
         cauchy_points = para["cauchy_points"] if "cauchy_points" in para else (
             p[sites_len + Dm_len:sites_len + Dm_len + cauchy_len].reshape(shapes[2][0], shapes[2][1]))
         cauchy_field = coordinates.copy()
-        field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points)
+        field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points,etas=kwargs['etas'] if 'etas' in kwargs.keys() else None)
     else:
-        field = voronoi_field(coordinates, sites, Dm=Dm)
+        field = voronoi_field(coordinates, sites, Dm=Dm,etas=kwargs['etas'] if 'etas' in kwargs.keys() else None)
 
     if "heaviside" in para and para["heaviside"] is True:
         field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
@@ -195,7 +199,7 @@ if __name__ == '__main__':
 
     # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
     # field=voronoi_field(coordinates, sites, Dm=Dm)
-    field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points)
+    field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points,etas=1e-15)
 
     print(f"代码运行时间：{time.time() - start_time:.6f} 秒")
 
