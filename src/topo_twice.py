@@ -286,7 +286,7 @@ vf = 0.5
 
 sites_num = 30
 dim = 2
-margin = 0
+margin = 5
 coordinates = np.indices((Nx, Ny))
 
 
@@ -320,7 +320,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cauchy_points = sites.copy()
 numConstraints = 1
-optimizationParams = {'maxIters': 49, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,
                       "Dm_dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -348,12 +348,12 @@ problem2.op = optimizationParams2
 problem2.setTarget(j * 1.5)
 # cauchy_points=sites.copy()
 p_ini2 = np.ravel(cauchy_points)  # 1-d array contains flattened: sites,Dm,cauchy points
-p_final,j =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
+p_final,j_now =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)
 
 
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
-print(f"previous J/compliance :{j}")
+print(f"previous J/compliance :{j}\n now error:{j_now}")
 print(f"running time:{time.time() - time_start}")
 # Plot the optimization results.
 obj = onp.array(outputs)

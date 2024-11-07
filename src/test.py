@@ -1,13 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
+sites=np.random.randint(0,100,size=(10,2))
+cauchy=np.random.randint(0,100,size=(10,2))
 
-x=np.linspace(-10,10,1000)
-def normal_distribution(x,mu=0.,sigma=1.):
-    return 1./(sigma*np.sqrt(2*np.pi))*np.exp(-(x-mu)**2/(2*sigma**2))
-sigma=1./4
-mu=1
-k=1/normal_distribution(1,mu,sigma)
-print(k)
-y=normal_distribution(x,mu=mu,sigma=sigma)*k
-plt.plot(x,y)
+plt.scatter(sites[:,0],sites[:,1],marker="o")
+plt.scatter(cauchy[:,0],cauchy[:,1],marker="+")
+
+
+plt.plot([sites[:,0], cauchy[:,0]], [sites[:,1], cauchy[:,1]], 'b-')
 plt.show()

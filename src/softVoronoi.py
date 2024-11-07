@@ -74,11 +74,17 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
     cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
 
-    sigma = 1. / 100
+    sigma = 1. / 20
     mu = 1
-    k = 1 / normal_distribution(mu, mu, sigma)*3.
-    cos=normal_distribution(cos,mu=mu,sigma=sigma)*k+1
-    return cos*dist_matrix
+    scale=1.5
+    k = (1 / normal_distribution(mu, mu, sigma))*scale
+    cos=normal_distribution(cos,mu=mu,sigma=sigma)*k*(-1)+scale+1
+    sigma_mask = 25. #用于valley消失于多远
+    mu_mask = 0
+    scale_mask = 1
+    k_mask = (1 / normal_distribution(mu_mask, mu_mask, sigma_mask)) * scale_mask
+    cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
+    return (cos**cos_mask)*dist_matrix
 
 
 
@@ -91,14 +97,20 @@ def d_sigmoid(field, sites, **kwargs):
     dist_sig = dist * sigmoid_t(dist) * 2  # Ns*n*n
     return dist_sig
 
+def cauchy_distribution(x, **kwargs):
+    x0 = kwargs['x0'] if 'x0' in kwargs.keys() else 0
+    gamma = kwargs['gamma'] if 'gamma' in kwargs.keys() else 1
+    scale = kwargs['scale'] if 'scale' in kwargs.keys() else 1
+    cauchy = (1. * scale / np.pi) * (gamma / ((x - x0) ** 2 + gamma ** 2))
+    return cauchy
 
 def cauchy_mask(dist_field, point: np.array, mask_field,gamma=5,scale=10,**kwargs):
-    def cauchy_distribution(x, **kwargs):
-        x0 = kwargs['x0'] if 'x0' in kwargs.keys() else 0
-        gamma = kwargs['gamma'] if 'gamma' in kwargs.keys() else 1
-        scale = kwargs['scale'] if 'scale' in kwargs.keys() else 1
-        cauchy = (1. * scale / np.pi) * (gamma / ((x - x0) ** 2 + gamma ** 2))
-        return cauchy
+    # def cauchy_distribution(x, **kwargs):
+    #     x0 = kwargs['x0'] if 'x0' in kwargs.keys() else 0
+    #     gamma = kwargs['gamma'] if 'gamma' in kwargs.keys() else 1
+    #     scale = kwargs['scale'] if 'scale' in kwargs.keys() else 1
+    #     cauchy = (1. * scale / np.pi) * (gamma / ((x - x0) ** 2 + gamma ** 2))
+    #     return cauchy
     if "Dm" in kwargs:
         mask_field=d_mahalanobis(mask_field, point, kwargs['Dm'])
     else:
@@ -168,7 +180,7 @@ def generate_voronoi_separate(para, p, **kwargs):
     coordinates = para["coordinates"]
     sites_num = para["sites_num"]
     Dm_dim = para["Dm_dim"]
-    # kwargs["etas"]=1e-20
+    kwargs["etas"]=1e-15
 
     shapes = [(sites_num, Dm_dim), (sites_num, Dm_dim, Dm_dim), (sites_num, Dm_dim)]
     sites_len = (shapes[0][0] * shapes[0][1]) if "sites" not in para else 0

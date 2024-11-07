@@ -77,9 +77,15 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
     sigma = 1. / 100
     mu = 1
-    k = 1 / normal_distribution(mu, mu, sigma)*0.5
-    cos=normal_distribution(cos,mu=mu,sigma=sigma)*k+1
-    return cos*dist_matrix
+    scale = 0.5
+    k = (1 / normal_distribution(mu, mu, sigma)) * scale
+    cos = normal_distribution(cos, mu=mu, sigma=sigma) * k * (-1) + scale + 1
+    sigma_mask = 20.
+    mu_mask = 0
+    scale_mask = 1
+    k_mask = (1 / normal_distribution(mu_mask, mu_mask, sigma_mask)) * scale_mask
+    cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
+    return (cos**cos_mask)*dist_matrix
 
 
 
@@ -216,12 +222,12 @@ if __name__ == '__main__':
     coordinates = np.stack(coords, axis=-1)
     cauchy_field = coordinates.copy()
 
-    # sites=np.array(([30,50],[80,50],))
-    # cauchy_points=np.array(([70,30],[90,50]))
-    np.random.seed(0)
-    sites = np.random.randint(low=0, high=100, size=(40, 2))
-    cauchy_points = sites.copy()
-    cauchy_points = cauchy_points+cauchy_points *np.random.normal(loc=0, scale=1, size=cauchy_points.shape)
+    sites=np.array(([30,50],[80,50],))
+    cauchy_points=np.array(([70,30],[90,50]))
+    # np.random.seed(0)
+    # sites = np.random.randint(low=0, high=100, size=(40, 2))
+    # cauchy_points = sites.copy()
+    # cauchy_points = cauchy_points+cauchy_points *np.random.normal(loc=0, scale=1, size=cauchy_points.shape)
 
     Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     Dm[0] = np.array(([1, 0], [0, 1]))
