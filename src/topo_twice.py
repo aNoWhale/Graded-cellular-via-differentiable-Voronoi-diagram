@@ -348,6 +348,7 @@ problem2.op = optimizationParams2
 problem2.setTarget(j * 1.5)
 # cauchy_points=sites.copy()
 p_ini2 = np.ravel(cauchy_points)  # 1-d array contains flattened: sites,Dm,cauchy points
+# p_ini2= np.concatenate((p_oped,np.ravel(cauchy_points)), axis=0)
 p_final,j_now =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)
 
@@ -366,4 +367,6 @@ coordinates = np.stack(coordinates, axis=-1)
 rho=voronoi_field(coordinates,sites,Dm=Dm,cauchy_points=cauchy_points)
 ax2.scatter(sites[:,0], sites[:,1],marker='o')
 ax2.scatter(cauchy_points[:,0],cauchy_points[:,1],marker='+')
-plt.show()
+plt.draw()
+plt.savefig(f'data/vtk/result.png', dpi=300, bbox_inches='tight')
+# plt.show()

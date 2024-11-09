@@ -58,7 +58,7 @@ def normal_distribution(x,mu=0.,sigma=1.):
 
 def d_mahalanobis_masked(x, xm, xs,Dm):
 
-    alot=1e-9
+    alot=1e-9 # avoid nan
     diff_xxm = x[np.newaxis, :, :, np.newaxis, :] - xm[:, np.newaxis, np.newaxis, np.newaxis, :]  # Nc*n*n*1*dim
     # dot1 = np.einsum('ijklm,imn->ijkln', diff_xxm, Dm.swapaxes(1, 2))
     # dot2 = np.einsum('imn,ijknl->ijkml', Dm, diff_xxm.swapaxes(-1, -2))
@@ -74,28 +74,34 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
     cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
 
-    sigma = 1. / 20
+    ##### Ultraman
+    # sigma = 1. / 3 #1/20
+    # mu = 1
+    # scale=1.5 #1.5
+    # k = (1 / normal_distribution(mu, mu, sigma))*scale
+    # cos=normal_distribution(cos,mu=mu,sigma=sigma)*k*(-1)+scale+1
+
+    ##### peach
+    sigma = 1. / 3 #1/100   1/3
     mu = 1
-    scale=1.5
-    k = (1 / normal_distribution(mu, mu, sigma))*scale
-    cos=normal_distribution(cos,mu=mu,sigma=sigma)*k*(-1)+scale+1
+    scale = 1 #0.5
+    k = (1 / normal_distribution(mu, mu, sigma)) * scale
+    cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
+
     sigma_mask = 25. #用于valley消失于多远
     mu_mask = 0
     scale_mask = 1
     k_mask = (1 / normal_distribution(mu_mask, mu_mask, sigma_mask)) * scale_mask
     cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
+
+    # x0=20. #用于valley消失于多远
+    # smooth=0.1
+    # cos_mask=sigmoid(-1*smooth*(dist_matrix-x0))
+    cos_mask=1
     return (cos**cos_mask)*dist_matrix
 
-
-
-def d_sigmoid(field, sites, **kwargs):
-    def sigmoid_t(z, move=0):
-        return 1 / (1 + np.exp(-z + move))
-
-    dist = d_euclidean(field, sites)  # Ns*n*n
-    # dist=np.sum(dist_field[np.newaxis,:,:,:]-sites[:,np.newaxis,np.newaxis,:],axis=-1)#n*n*dim Ns*dim -> Ns*n*n*dim ->Ns*n*n
-    dist_sig = dist * sigmoid_t(dist) * 2  # Ns*n*n
-    return dist_sig
+def sigmoid(x):
+    return 1/(1+np.exp(-x))
 
 def cauchy_distribution(x, **kwargs):
     x0 = kwargs['x0'] if 'x0' in kwargs.keys() else 0
@@ -137,7 +143,7 @@ def voronoi_field(field, sites, **kwargs):
     #     else:
     #         dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
     soft = batch_softmax(dist,etas=kwargs["etas"] if "etas" in kwargs.keys() else None)
-    beta = 5
+    beta = 10
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 

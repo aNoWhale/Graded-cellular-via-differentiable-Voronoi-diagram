@@ -465,10 +465,11 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
                 plt.scatter(sites[:,1],sites[:,0],color='r',marker='o')
             if optimizationParams["stage"]==1:
                 sites = optimizationParams["sites"].reshape(optimizationParams["sites_num"], optimizationParams["Dm_dim"])
+                # sites=p[0:optimizationParams["sites_num"]*optimizationParams["Dm_dim"]].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
                 plt.scatter(sites[:, 1], sites[:, 0], color='r', marker='o')
                 cauchy=p[0:(optimizationParams["sites_num"]*optimizationParams["Dm_dim"])].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
                 plt.scatter(cauchy[:, 1], cauchy[:, 0], color='y', marker='+')
-                plt.plot([sites[:,1], cauchy[:,1]], [sites[:,0], cauchy[:,0]], 'w--')
+                # plt.plot([sites[:,1], cauchy[:,1]], [sites[:,0], cauchy[:,0]], 'w--')
             plt.draw()
             plt.savefig(f'data/vtk/{loop+optimizationParams["lastIters"]}.png', dpi=300, bbox_inches='tight')
             plt.pause(0.01)

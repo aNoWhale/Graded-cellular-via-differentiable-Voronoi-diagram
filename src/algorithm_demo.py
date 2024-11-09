@@ -75,17 +75,34 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
     dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
     cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
-    sigma = 1. / 100
+    ##### 奥特曼形
+    # sigma = 1. / 30
+    # mu = 1
+    # scale = 3
+    # k = (1 / normal_distribution(mu, mu, sigma)) * scale
+    # cos = normal_distribution(cos, mu=mu, sigma=sigma) * k * (-1) + scale + 1
+    ##### 桃子
+    sigma = 1. / 10
     mu = 1
-    scale = 0.5
+    scale = 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
-    cos = normal_distribution(cos, mu=mu, sigma=sigma) * k * (-1) + scale + 1
-    sigma_mask = 20.
-    mu_mask = 0
-    scale_mask = 1
-    k_mask = (1 / normal_distribution(mu_mask, mu_mask, sigma_mask)) * scale_mask
-    cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
+    cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
+    #### 正态range
+    # sigma_mask = 20.
+    # mu_mask = 0
+    # scale_mask = 1
+    # k_mask = (1 / normal_distribution(mu_mask, mu_mask, sigma_mask)) * scale_mask
+    # cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
+    #### sigmoid range
+    # x0=20 #用于valley消失于多远
+    # smooth=0.1
+    cos_mask=1
+    # cos_mask=sigmoid(-1*smooth*(dist_matrix-x0))
     return (cos**cos_mask)*dist_matrix
+
+
+def sigmoid(x):
+    return 1/(1+np.exp(-x))
 
 
 
@@ -117,8 +134,6 @@ def voronoi_field(field, sites, **kwargs):
         dist = d_mahalanobis(field, sites, kwargs["Dm"])
     else:
         dist = d_euclidean(field, sites)  # Nc,r,c
-    if "quadratic" in kwargs and kwargs["quadratic"]:
-        dist=quadratic(dist)
     if "cauchy_field" in kwargs and "cauchy_points" in kwargs:
         if "Dm" in kwargs:
             Dm_inv = np.array([np.linalg.inv(kwargs["Dm"][i]) for i in range(kwargs["Dm"].shape[0])])
@@ -254,7 +269,7 @@ if __name__ == '__main__':
     mask_field = d_euclidean(mask_field, cauchy_points)  # Ns*n*n
     cauchy = cauchy_distribution(mask_field, gamma=10, scale=np.pi*10)
     # soft=soft*(cauchy+1)
-    beta = 3
+    beta = 10
     rho = np.sum(soft ** beta, axis=0)
     # rho=heaviside_projection(rho,eta=0.5, epoch=100)
 
