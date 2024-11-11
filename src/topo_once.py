@@ -47,7 +47,7 @@ class Elasticity(Problem):
             Emax = 70e3
             Emin = 1e-5 * Emax
             nu = 0.3
-            penal = 1.
+            penal = 3.
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -284,11 +284,11 @@ def consHandle2(p):
 # Finalize the details of the MMA optimizer, and solve the TO problem.
 vf = 0.3
 
-sites_num = 30
+sites_num = 10
 dim = 2
 margin = 5
 coordinates = np.indices((Nx, Ny))
-
+j=0
 
 def generate_points(Nx, Ny, sx, sy):
     # uniform points in 0,Nx 0,Ny
@@ -301,7 +301,7 @@ def generate_points(Nx, Ny, sx, sy):
     return points
 
 
-sites = generate_points(Nx, Ny, 10, 3)
+sites = generate_points(Nx, Ny, 5, 2)
 # onp.random.seed(0)
 # sites_x = onp.random.randint(low=0- margin, high=Nx+margin, size=(sites_num, 1))
 # sites_y = onp.random.randint(low=0- margin, high=Ny+margin, size=(sites_num, 1))
@@ -311,47 +311,29 @@ time_start = time.time()
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))
 Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
-Dm_up = np.tile(np.array([[1, 1], [1, 1]]), (sites_low.shape[0], 1, 1))
+Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
 cauchy_points_low = sites_low
 cauchy_points_up = sites_up
 bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cauchy_points_low)), axis=0)[:, None]
 bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_points_up)), axis=0)[:, None]
 
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-cauchy_points = sites.copy()
+cauchy_points = sites.copy()*(onp.random.random(sites.shape)+1)
 numConstraints = 1
-optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 99, 'movelimit': 0.2, "lastIters":0,"stage":1,
                       "coordinates": coordinates, "sites_num": sites_num,
                       "Dm_dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
-                      "heaviside": True, "cauchy": False,
-                      "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, sites_num * 6),
-                      "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]}
-# "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]
+                      "heaviside": True, "cauchy": True,
+                      "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, sites_num * 8),
+                      "immortal": ["cauchy_points"]}
+                      # "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]}
 problem.op = optimizationParams
-# p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
-p_ini = np.concatenate((np.ravel(sites), np.ravel(Dm)), axis=0)  # 1-d array contains flattened: sites,Dm,cauchy points
-p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,
+# p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
+p_ini = np.concatenate((np.ravel(sites), np.ravel(Dm),np.ravel(cauchy_points)), axis=0)  # 1-d array contains flattened: sites,Dm,cauchy points
+p_oped, j_now = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,
                      generate_voronoi_separate)
 """"""""""""""""""""""""""""""""""""""""""""""""""
-
-sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
-Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
-                       "coordinates": coordinates, "sites_num": sites_num,
-                       "Dm_dim": dim,
-                       "Nx": Nx, "Ny": Ny, "margin": margin,
-                       "heaviside": True, "cauchy": True,
-                       "bound_low": bound_low, "bound_up": bound_up, "paras_at": (sites_num * 6, sites_num * 8),
-                       "sites": sites, "Dm": Dm, "immortal": ["sites", "Dm"]}
-problem2.op = optimizationParams2
-problem2.setTarget(j * 15)
-# cauchy_points=sites.copy()
-p_ini2 = np.ravel(cauchy_points)  # 1-d array contains flattened: sites,Dm,cauchy points
-# p_ini2= np.concatenate((p_oped,np.ravel(cauchy_points)), axis=0)
-p_final,j_now =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
-         generate_voronoi_separate)
-
 
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
 print(f"previous J/compliance :{j}\n now error:{j_now}")

@@ -82,21 +82,22 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     # cos=normal_distribution(cos,mu=mu,sigma=sigma)*k*(-1)+scale+1
 
     ##### peach
-    sigma = 1. / 3 #1/100   1/3
+    sigma = 1. / 30 #1/100   1/3
     mu = 1
-    scale = 1 #0.5
+    scale = 1 # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
 
-    sigma_mask = 25. #用于valley消失于多远
-    mu_mask = 0
-    scale_mask = 1
-    k_mask = (1 / normal_distribution(mu_mask, mu_mask, sigma_mask)) * scale_mask
-    cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
+    # sigma_mask = 25. #用于valley消失于多远
+    # mu_mask = 0
+    # scale_mask = 1
+    # k_mask = (1 / normal_distribution(mu_mask, mu_mask, sigma_mask)) * scale_mask
+    # cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
 
     # x0=20. #用于valley消失于多远
     # smooth=0.1
     # cos_mask=sigmoid(-1*smooth*(dist_matrix-x0))
+
     cos_mask=1
     return (cos**cos_mask)*dist_matrix
 
@@ -143,7 +144,7 @@ def voronoi_field(field, sites, **kwargs):
     #     else:
     #         dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
     soft = batch_softmax(dist,etas=kwargs["etas"] if "etas" in kwargs.keys() else None)
-    beta = 10
+    beta = 10 #10
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 

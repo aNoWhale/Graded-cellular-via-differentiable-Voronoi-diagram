@@ -454,9 +454,10 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
             loop += 1
             pbar.update(1)
             print(f"MMA solver...")
-
-            rho = generate_rho(optimizationParams, p, epoch=loop)
-
+            if optimizationParams["stage"] == 0:
+                rho = generate_rho(optimizationParams, p, epoch=loop)
+            elif optimizationParams["stage"] == 1:
+                rho = generate_rho(optimizationParams, p, epoch=optimizationParams['lastIters'])
             plt.clf()
             plt.imshow(rho,cmap='viridis')
             plt.title(f"loop:{loop+optimizationParams['lastIters']}/{optimizationParams['maxIters']+optimizationParams['lastIters']}")
@@ -464,10 +465,10 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
                 sites=p[0:optimizationParams["sites_num"]*optimizationParams["Dm_dim"]].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
                 plt.scatter(sites[:,1],sites[:,0],color='r',marker='o')
             if optimizationParams["stage"]==1:
-                sites = optimizationParams["sites"].reshape(optimizationParams["sites_num"], optimizationParams["Dm_dim"])
-                # sites=p[0:optimizationParams["sites_num"]*optimizationParams["Dm_dim"]].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
+                # sites = optimizationParams["sites"].reshape(optimizationParams["sites_num"], optimizationParams["Dm_dim"])
+                sites=p[0:optimizationParams["sites_num"]*optimizationParams["Dm_dim"]].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
                 plt.scatter(sites[:, 1], sites[:, 0], color='r', marker='o')
-                cauchy=p[0:(optimizationParams["sites_num"]*optimizationParams["Dm_dim"])].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
+                cauchy=p[optimizationParams["sites_num"]*6:(optimizationParams["sites_num"])*8].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
                 plt.scatter(cauchy[:, 1], cauchy[:, 0], color='y', marker='+')
                 # plt.plot([sites[:,1], cauchy[:,1]], [sites[:,0], cauchy[:,0]], 'w--')
             plt.draw()

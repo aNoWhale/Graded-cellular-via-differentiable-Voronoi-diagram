@@ -70,11 +70,15 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     dist_matrix = np.sqrt(nor)+alot  # Nc*n*n
 
     diff_xmxs = xm[:,None,:] - xs[:,None,:] #N*1*dim
-    dot1 = np.einsum('ijk,ikl->ijl', diff_xmxs, Dm.swapaxes(1, 2))
-    dot2 = np.einsum('ijk,ikl->ijl', Dm, diff_xmxs.swapaxes(-1, -2))
-    nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
-    dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
-    cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
+    # dot1 = np.einsum('ijk,ikl->ijl', diff_xmxs, Dm.swapaxes(1, 2))
+    # dot2 = np.einsum('ijk,ikl->ijl', Dm, diff_xmxs.swapaxes(-1, -2))
+    # nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
+    # dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
+    dist_exmxs=np.linalg.norm(diff_xmxs, axis=-1)[:,None,None,:]+alot
+    dist_exxm=np.linalg.norm(diff_xxm, axis=-1)+alot
+    # cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
+    cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_exmxs*dist_exxm).squeeze()) #Nc*n*n
+
     ##### 奥特曼形
     # sigma = 1. / 30
     # mu = 1
@@ -245,7 +249,7 @@ if __name__ == '__main__':
     # cauchy_points = cauchy_points+cauchy_points *np.random.normal(loc=0, scale=1, size=cauchy_points.shape)
 
     Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    Dm[0] = np.array(([1, 0], [0, 1]))
+    Dm[0] = np.array(([2, 0], [0, 1]))
 
     # fig = plt.figure()
     # ax = fig.add_subplot(111, projection='3d')
