@@ -64,7 +64,7 @@ class Elasticity(Problem):
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([0., -200.])
+            return np.array([0., -100.])
 
         return [surface_map]
 
@@ -120,10 +120,14 @@ mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
 # Define boundary conditions and values.
 def fixed_location(point):
     return np.isclose(point[0], 0., atol=1e-5)
+    # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
+    #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
 
 
 def load_location(point):
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0., atol=0.1 * Ly + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly, atol=0.1 * Ly + 1e-5))
+    # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
+    #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
 
 
 def dirichlet_val(point):
@@ -253,6 +257,7 @@ def objectiveHandle2(p):
 #     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
 #     c, gradc = c.reshape((1,)), gradc[None, ...]
 #     return c, gradc
+
 def consHandle1(rho):
 
     # MMA solver requires (c, dc) as inputs
@@ -282,7 +287,7 @@ def consHandle2(p):
 
 
 # Finalize the details of the MMA optimizer, and solve the TO problem.
-vf = 0.3
+vf = 0.2
 
 sites_num = 30
 dim = 2
@@ -325,18 +330,20 @@ optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "Dm_dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
                       "heaviside": True, "cauchy": False,
-                      "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, sites_num * 6),
-                      "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]}
+                      "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, sites_num * 2),
+                      "cauchy_points": cauchy_points,"Dm":Dm, "immortal": ["cauchy_points","Dm"]}
 # "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]
 problem.op = optimizationParams
 # p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
-p_ini = np.concatenate((np.ravel(sites), np.ravel(Dm)), axis=0)  # 1-d array contains flattened: sites,Dm,cauchy points
+# p_ini = np.concatenate((np.ravel(sites), np.ravel(Dm)), axis=0)  # 1-d array contains flattened: sites,Dm,cauchy points
+p_ini = np.ravel(sites) # 1-d array contains flattened: sites,Dm,cauchy points
+
 p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,
                      generate_voronoi_separate)
 """"""""""""""""""""""""""""""""""""""""""""""""""
 
 sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
-Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
+# Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
 optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates, "sites_num": sites_num,
                        "Dm_dim": dim,
@@ -345,7 +352,7 @@ optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "lastIters":optimizati
                        "bound_low": bound_low, "bound_up": bound_up, "paras_at": (sites_num * 6, sites_num * 8),
                        "sites": sites, "Dm": Dm, "immortal": ["sites", "Dm"]}
 problem2.op = optimizationParams2
-problem2.setTarget(j * 15)
+problem2.setTarget(j * 1.5)
 # cauchy_points=sites.copy()
 p_ini2 = np.ravel(cauchy_points)  # 1-d array contains flattened: sites,Dm,cauchy points
 # p_ini2= np.concatenate((p_oped,np.ravel(cauchy_points)), axis=0)

@@ -2,7 +2,7 @@ import vtk
 
 # 读取VTU文件
 reader = vtk.vtkXMLUnstructuredGridReader()
-reader.SetFileName("data/vtk_15/sol_98.vtu")
+reader.SetFileName("data/vtk_test/sol_098.vtu")
 reader.Update()
 
 # 创建阈值过滤器以提取theta层
@@ -86,6 +86,6 @@ poly_data_with_thickness.SetPolys(faces)
 
 # 写入新的STL文件
 stl_writer = vtk.vtkSTLWriter()
-stl_writer.SetFileName("sol_98.stl")
+stl_writer.SetFileName("sol_098.stl")
 stl_writer.SetInputData(poly_data_with_thickness)
 stl_writer.Write()

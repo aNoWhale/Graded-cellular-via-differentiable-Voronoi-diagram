@@ -65,15 +65,18 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     # nor = np.einsum("ijklm,ijkml->ijk", dot1, dot2)
     nor = np.einsum("ijklm,ijkml->ijk", np.einsum('ijklm,imn->ijkln', diff_xxm, Dm.swapaxes(1, 2)), np.einsum('imn,ijknl->ijkml', Dm, diff_xxm.swapaxes(-1, -2)))
     dist_matrix = np.sqrt(nor)+alot  # Nc*n*n
-    norm_v=np.array([[1,0]]) #1*2
+    # norm_v=np.array([[1,0]]) #1*2
 
     diff_xmxs = xm[:,None,:] - xs[:,None,:] #N*1*dim
-    dot1 = np.einsum('ijk,ikl->ijl', diff_xmxs, Dm.swapaxes(1, 2))
-    dot2 = np.einsum('ijk,ikl->ijl', Dm, diff_xmxs.swapaxes(-1, -2))
-    nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
-    dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
-    cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
+    # dot1 = np.einsum('ijk,ikl->ijl', diff_xmxs, Dm.swapaxes(1, 2))
+    # dot2 = np.einsum('ijk,ikl->ijl', Dm, diff_xmxs.swapaxes(-1, -2))
+    # nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
+    # dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
 
+    dist_exmxs=np.linalg.norm(diff_xmxs, axis=-1)[:,None,None,:]+alot
+    dist_exxm=np.linalg.norm(diff_xxm, axis=-1)+alot
+    # cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
+    cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_exmxs*dist_exxm).squeeze()) #Nc*n*n
     ##### Ultraman
     # sigma = 1. / 3 #1/20
     # mu = 1
@@ -82,7 +85,7 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     # cos=normal_distribution(cos,mu=mu,sigma=sigma)*k*(-1)+scale+1
 
     ##### peach
-    sigma = 1. / 30 #1/100   1/3
+    sigma = 1. / 30 #1/100   1/3   1/30
     mu = 1
     scale = 1 # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
@@ -144,7 +147,7 @@ def voronoi_field(field, sites, **kwargs):
     #     else:
     #         dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
     soft = batch_softmax(dist,etas=kwargs["etas"] if "etas" in kwargs.keys() else None)
-    beta = 10 #10
+    beta =5 #10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -187,7 +190,7 @@ def generate_voronoi_separate(para, p, **kwargs):
     coordinates = para["coordinates"]
     sites_num = para["sites_num"]
     Dm_dim = para["Dm_dim"]
-    kwargs["etas"]=1e-15
+    # kwargs["etas"]=1e-20 #-15
 
     shapes = [(sites_num, Dm_dim), (sites_num, Dm_dim, Dm_dim), (sites_num, Dm_dim)]
     sites_len = (shapes[0][0] * shapes[0][1]) if "sites" not in para else 0
