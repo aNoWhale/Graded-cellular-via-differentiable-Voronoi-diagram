@@ -17,7 +17,7 @@ sys.path.append(jax_fem_voronoi_dir)
 sys.path.append(src_dir)
 # Import JAX-FEM specific modules.
 from jax_fem.problem import Problem
-from jax_fem.solver import solver, ad_wrapper
+from jax_fem.solver import ad_wrapper
 from jax_fem.utils import save_sol
 from jax_fem.generate_mesh import get_meshio_cell_type, Mesh, rectangle_mesh
 from jax_fem.mma import optimize
@@ -27,8 +27,7 @@ from jax_fem.mma import optimize
 # reflected by the function 'stress'. The functions 'custom_init'and 'set_params'
 # override base class methods. In particular, set_params sets the design variable theta.
 
-from softVoronoi import generate_voronoi
-from softVoronoi import generate_voronoi_separate, voronoi_field
+from softVoronoi_cell import generate_voronoi_separate
 plt.ion()
 fig, ax = plt.subplots()
 
@@ -109,9 +108,10 @@ for f in files:
 ele_type = 'QUAD4'
 cell_type = get_meshio_cell_type(ele_type)
 
-Nx = 100
-Ny = 50
-Lx, Ly = 100., 50.
+Nx = 1000
+Ny = 500
+resolution=0.03
+Lx, Ly = Nx*resolution, Ny*resolution
 
 meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
 mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
@@ -316,22 +316,22 @@ time_start = time.time()
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))
 Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
-Dm_up = np.tile(np.array([[1, 1], [1, 1]]), (sites_low.shape[0], 1, 1))
-cauchy_points_low = sites_low
-cauchy_points_up = sites_up
-bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cauchy_points_low)), axis=0)[:, None]
-bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cauchy_points_up)), axis=0)[:, None]
+Dm_up = np.tile(np.array([[2000, 2000], [2000, 2000]]), (sites_low.shape[0], 1, 1))
+cp_low = sites_low
+cp_up = sites_up
+bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
+bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
 
-Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-cauchy_points = sites.copy()
+Dm = np.tile(np.array(([1000, 0], [0, 1000])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+cp = sites.copy()
 numConstraints = 1
 optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,
-                      "Dm_dim": dim,
+                      "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
-                      "heaviside": True, "cauchy": False,
+                      "heaviside": True, "control": False,
                       "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, sites_num * 2),
-                      "cauchy_points": cauchy_points,"Dm":Dm, "immortal": ["cauchy_points","Dm"]}
+                      "cp": cp,"Dm":Dm, "immortal": ["cp","Dm"]}
 # "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]
 problem.op = optimizationParams
 # p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
@@ -346,15 +346,15 @@ sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
 # Dm = p_oped[sites_num * dim:].reshape((sites_num, dim, dim))
 optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates, "sites_num": sites_num,
-                       "Dm_dim": dim,
+                       "dim": dim,
                        "Nx": Nx, "Ny": Ny, "margin": margin,
-                       "heaviside": True, "cauchy": True,
+                       "heaviside": True, "control": True,
                        "bound_low": bound_low, "bound_up": bound_up, "paras_at": (sites_num * 6, sites_num * 8),
                        "sites": sites, "Dm": Dm, "immortal": ["sites", "Dm"]}
 problem2.op = optimizationParams2
 problem2.setTarget(j * 1.5)
 # cauchy_points=sites.copy()
-p_ini2 = np.ravel(cauchy_points)  # 1-d array contains flattened: sites,Dm,cauchy points
+p_ini2 = np.ravel(cp)  # 1-d array contains flattened: sites,Dm,cauchy points
 # p_ini2= np.concatenate((p_oped,np.ravel(cauchy_points)), axis=0)
 p_final,j_now =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)

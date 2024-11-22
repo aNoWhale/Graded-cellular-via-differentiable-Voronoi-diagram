@@ -27,7 +27,7 @@ from jax_fem.mma import optimize
 # reflected by the function 'stress'. The functions 'custom_init'and 'set_params'
 # override base class methods. In particular, set_params sets the design variable theta.
 
-from softVoronoi import generate_voronoi
+
 from softVoronoi import generate_voronoi_separate, voronoi_field
 plt.ion()
 fig, ax = plt.subplots()

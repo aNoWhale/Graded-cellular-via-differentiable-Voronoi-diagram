@@ -152,38 +152,6 @@ def voronoi_field(field, sites, **kwargs):
     return rho
 
 
-def generate_voronoi(para, p: np.array, **kwargs):
-    """
-
-    :param para:
-    :param p: a params 1-d array, can be divided into sites,Dm,cauchy_points.
-    :return:
-    """
-    coordinates = para["coordinates"]
-    sites_num = para["sites_num"]
-    Dm_dim = para["Dm_dim"]
-
-    shapes = [(sites_num, Dm_dim), (sites_num, Dm_dim, Dm_dim), (sites_num, Dm_dim)]
-    sites_len = (shapes[0][0] * shapes[0][1])
-    Dm_len = shapes[1][0] * shapes[1][1] * shapes[1][2]
-    cauchy_len = shapes[2][0] * shapes[2][1]
-
-    if p.shape[0] == 1 and p.shape[1] != 1:
-        p = p[0]
-    sites = p[0:sites_len].reshape(shapes[0][0], shapes[0][1])
-    Dm = p[sites_len:sites_len + Dm_len].reshape(shapes[1][0], shapes[1][1], shapes[1][2])
-
-    if "cauchy" in para and para["cauchy"]:
-        cauchy_points = p[sites_len + Dm_len:sites_len + Dm_len + cauchy_len].reshape(shapes[2][0], shapes[2][1])
-        coordinates = np.stack(coordinates, axis=-1)
-        cauchy_field = coordinates.copy()
-        field = voronoi_field(coordinates, sites, Dm=Dm, cauchy_field=cauchy_field, cauchy_points=cauchy_points)
-    else:
-        field = voronoi_field(coordinates, sites, Dm=Dm)
-
-    if "heaviside" in para and para["heaviside"] is True:
-        field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
-    return field
 
 
 def generate_voronoi_separate(para, p, **kwargs):

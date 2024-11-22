@@ -25,38 +25,46 @@ config.update("jax_enable_x64", True)
 def compute_filter_kd_tree(fe):
     """This function is created by Tianju. Not from the original code.
     We use k-d tree algorithm to compute the filter.
+    revised by changkun
     """
+    # 计算单元的重心
     cell_centroids = np.mean(np.take(fe.points, fe.cells, axis=0), axis=1)
     flex_num_cells = len(fe.flex_inds)
     flex_cell_centroids = np.take(cell_centroids, fe.flex_inds, axis=0)
 
+    # 计算总体积和平均体积
     V = np.sum(fe.JxW)
-    avg_elem_V = V/fe.num_cells
+    avg_elem_V = V / fe.num_cells
 
-    avg_elem_size = avg_elem_V**(1./fe.dim)
-    rmin = 1.5*avg_elem_size
+    # 计算平均单元大小和滤波半径
+    avg_elem_size = avg_elem_V ** (1. / fe.dim)
+    rmin = 1.5 * avg_elem_size
 
+    # 使用 k-d 树查找邻居
     kd_tree = scipy.spatial.KDTree(flex_cell_centroids)
+
     I = []
     J = []
     V = []
+
+    # 对每个灵活单元进行遍历，查找邻居并计算滤波值
     for i in range(flex_num_cells):
         num_nbs = 20
         dd, ii = kd_tree.query(flex_cell_centroids[i], num_nbs)
         neighbors = np.take(flex_cell_centroids, ii, axis=0)
         vals = np.where(rmin - dd > 0., rmin - dd, 0.)
-        I += [i]*num_nbs
+
+        I += [i] * num_nbs
         J += ii.tolist()
         V += vals.tolist()
-    H_sp = scipy.sparse.csc_array((V, (I, J)), shape=(flex_num_cells, flex_num_cells))
 
-    # TODO(Tianju): No need to create the full matrix. 
-    # Will cause memory issue for large size problem.
-    # High priority!
+    # 使用稀疏矩阵构建滤波矩阵 H
+    H_sp = scipy.sparse.csc_matrix((V, (I, J)), shape=(flex_num_cells, flex_num_cells))
 
-    H = H_sp.todense()
-    Hs = np.sum(H, 1)
-    return H, Hs
+    # 计算每行的总和 H_s
+    Hs = np.array(H_sp.sum(axis=1)).flatten()
+
+    return H_sp, Hs
 
 
 def applySensitivityFilter(ft, p, dJ, dvc):
@@ -458,17 +466,19 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
                 rho = generate_rho(optimizationParams, p, epoch=loop)
             elif optimizationParams["stage"] == 1:
                 rho = generate_rho(optimizationParams, p, epoch=optimizationParams['lastIters'])
+
+            ####render windows and save fig
             plt.clf()
             plt.imshow(rho,cmap='viridis')
             plt.title(f"loop:{loop+optimizationParams['lastIters']}/{optimizationParams['maxIters']+optimizationParams['lastIters']}")
             if optimizationParams["stage"]==0:
-                sites=p[0:optimizationParams["sites_num"]*optimizationParams["Dm_dim"]].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
+                sites=p[0:optimizationParams["sites_num"]*optimizationParams["dim"]].reshape(optimizationParams["sites_num"],optimizationParams["dim"])
                 plt.scatter(sites[:,1],sites[:,0],color='r',marker='o')
             if optimizationParams["stage"]==1:
-                sites = optimizationParams["sites"].reshape(optimizationParams["sites_num"], optimizationParams["Dm_dim"])
+                sites = optimizationParams["sites"].reshape(optimizationParams["sites_num"], optimizationParams["dim"])
                 # sites=p[0:optimizationParams["sites_num"]*optimizationParams["Dm_dim"]].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
                 plt.scatter(sites[:, 1], sites[:, 0], color='r', marker='o')
-                cauchy=p[0:optimizationParams["sites_num"]*2].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
+                cauchy=p[0:optimizationParams["sites_num"]*2].reshape(optimizationParams["sites_num"],optimizationParams["dim"])
                 # cauchy=p[optimizationParams["sites_num"]*6:(optimizationParams["sites_num"])*8].reshape(optimizationParams["sites_num"],optimizationParams["Dm_dim"])
                 plt.scatter(cauchy[:, 1], cauchy[:, 0], color='y', marker='+')
                 # plt.plot([sites[:,1], cauchy[:,1]], [sites[:,0], cauchy[:,0]], 'w--')
@@ -479,7 +489,6 @@ def optimize(fe, p_ini, optimizationParams, objectiveHandle, consHandle, numCons
             rho=rho.flatten()[:, None]
             assert rho.shape[1]==1
             J, dJ = objectiveHandle(rho) # get from rho = fun(p)
-            # vc, dvc = consHandle(rho) # get from rho
             vc, dvc = consHandle(rho) # get from rho
 
             dJ_drho, dvc_drho = applySensitivityFilter(ft, rho, dJ, dvc)
