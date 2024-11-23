@@ -288,6 +288,7 @@ def generate_points(Lx, Ly, sx, sy):
 
 time_start = time.time()
 
+
 """"""""""""""""first step"""""""""""""""""""""
 meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
 mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
