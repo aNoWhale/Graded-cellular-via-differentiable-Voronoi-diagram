@@ -5,6 +5,7 @@ import jax
 import numpy as onp
 import jax.numpy as np
 from matplotlib import pyplot as plt
+import tqdm
 
 @jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
@@ -100,7 +101,7 @@ def d_euclidean_cell(cell, sites, *args):
 def d_mahalanobis_cell(cell, sites, Dm, *args):
     Dm=Dm[0]
     diff = sites[:, None, :] - cell[None, None, :]  # n*1*dim
-    dist_m_cell = np.sqrt((diff @ Dm.swapaxes(1, 2) @ Dm @ diff.swapaxes(1, 2))).squeeze()
+    dist_m_cell = np.sqrt((diff @ Dm.swapaxes(-1, -2) @ Dm @ diff.swapaxes(-1, -2))).squeeze()
     return dist_m_cell
 
 
@@ -108,7 +109,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     alot = 1e-9  # avoid nan
     Dm = Dm[0]
     diff_sx = cell[None, None, :] - sites[:, None, :]  # N*1*dim
-    dist_m_cell = np.sqrt((diff_sx @ Dm.swapaxes(1, 2) @ Dm @ diff_sx.swapaxes(1, 2))).squeeze()
+    dist_m_cell = np.sqrt((diff_sx @ Dm.swapaxes(-1, -2) @ Dm @ diff_sx.swapaxes(-1, -2))).squeeze()
     diff_sc = cp[:, None, :] - sites[:, None, :]  # N*1*dim
     dist_sc = np.linalg.norm(diff_sc, axis=-1).squeeze() + alot  # N
     dist_sx = np.linalg.norm(diff_sx, axis=-1).squeeze() + alot  # N
@@ -153,14 +154,30 @@ def rho_cell_m(cell, sites, *args):
 def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     assert field.shape[-1] == 2
     cell = field.reshape(-1, 2)  # cell_num * 2
-    calc_rho=lambda cell,sites: rho_fn(cell, sites, tuple(kwargs.values()))
 
-    # rho = jax.vmap(calc_rho, in_axes=(0, None))(cell, sites)
-    rho=[]
-    for i in range(0,cell.shape[0]):
-        rho.append(calc_rho(cell[i,:], sites))
-    rho=np.array(rho)
-    return rho
+    # calc_rho=lambda cell,sites: rho_fn(cell, sites, tuple(kwargs.values()))
+    # # rho = jax.vmap(calc_rho, in_axes=(0, None))(cell, sites)
+    # rho=[]
+    # for i in tqdm.tqdm(range(0,cell.shape[0]),desc="calculating voronoi diagram"):
+    #     rho.append(calc_rho(cell[i, :], sites))
+    # rho=np.array(rho)
+    # return rho
+
+    def calc_rho(cell, sites):
+        return rho_fn(cell, sites, *kwargs.values())
+    # 使用 vmap 和 jit 加速计算
+    calc_rho_batch = jax.jit(jax.vmap(calc_rho, in_axes=(0, None)))
+    # 分块处理，避免内存占用过高
+    batch_size = kwargs.get('batch_size', 100)  # 支持通过 kwargs 控制 batch_size，默认为 1000
+    rho_list = []
+    for i in tqdm.tqdm(range(0, cell.shape[0], batch_size), desc="Calculating Voronoi Diagram"):
+        batch_cells = jax.device_put(cell[i:i + batch_size])  # 将当前批次放到设备上
+        rho_batch = calc_rho_batch(batch_cells, sites)  # 批量计算
+        rho_list.append(rho_batch)
+    # 合并所有批次结果
+    rho = np.concatenate(rho_list, axis=0)
+    # 恢复 rho 的形状，与输入 field 保持一致
+    return rho.reshape(field.shape[:-1])
 
 
 
@@ -201,12 +218,12 @@ def generate_para_rho(para, rho_p, **kwargs):
     key = jax.random.PRNGKey(0)
     random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
     # rho*float + x determines the point generation rate.
-    void=0.1
+    void=0.05
     entity=3.0
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
 
     para["sites_num"]=sites.shape[0]
-    move_around=20
+    move_around=30 # seed movement
     sites_low = sites.ravel()-move_around*para["resolution"]
     sites_up = sites.ravel()+move_around*para["resolution"]
     Dm = np.tile(np.array(([30, 0], [0, 30])), (sites.shape[0], 1, 1))  # Nc*dim*dim

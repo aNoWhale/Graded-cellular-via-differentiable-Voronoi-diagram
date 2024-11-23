@@ -9,7 +9,6 @@ import sys
 import glob
 import matplotlib
 from scipy.ndimage import zoom
-from mma_original import optimize_rho
 
 matplotlib.use('Qt5Agg') #for WSL
 import matplotlib.pyplot as plt
@@ -343,7 +342,7 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # cp = sites.copy()
 
 # Dm = rho_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 35, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1,
+optimizationParams2 = {'maxIters': 100, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates,"resolution":resolution,
                        # "sites_num": sites_num,
                        "dim": dim,
