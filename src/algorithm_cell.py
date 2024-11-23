@@ -129,7 +129,7 @@ if __name__ == '__main__':
     start_time = time.time()  # 计时起点
     np.random.seed(0)
     print(f"running！")
-    Nx,Ny=1000,1000
+    Nx,Ny=200,100
     resolution=0.03
     x_len = Nx*resolution
     y_len = Ny*resolution
@@ -140,12 +140,14 @@ if __name__ == '__main__':
     # sites=np.array(([5,5],[3,5]))
     # cp=np.array(([4,2],[5,6]))
 
-    sites = np.random.randint(low=0-20, high=Nx+20, size=(20, 2))*resolution
+    sites_x = np.random.randint(low=0, high=Nx, size=(36, 1))*resolution
+    sites_y = np.random.randint(low=0, high=Ny, size=(36, 1))*resolution
+    sites=np.concatenate((sites_x, sites_y), axis=-1)
     cp = sites.copy()
     cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
 
-    Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    Dm[0] = np.array(([100, 0], [0, 100]))
+    Dm = np.tile(np.array(([10, 0], [0, 10])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    # Dm[0] = np.array(([100, 0], [0, 100]))
 
     # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
     # field=voronoi_field(coordinates, sites, Dm=Dm)

@@ -8,6 +8,9 @@ import os
 import sys
 import glob
 import matplotlib
+from scipy.ndimage import zoom
+from mma_original import optimize_rho
+
 matplotlib.use('Qt5Agg') #for WSL
 import matplotlib.pyplot as plt
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,13 +24,14 @@ from jax_fem.solver import ad_wrapper
 from jax_fem.utils import save_sol
 from jax_fem.generate_mesh import get_meshio_cell_type, Mesh, rectangle_mesh
 from jax_fem.mma import optimize
+from jax_fem.mma_original import optimize_rho
 # Define constitutive relationship.
 # Generally, JAX-FEM solves -div.(f(u_grad,alpha_1,alpha_2,...,alpha_N)) = b.
 # Here, we have f(u_grad,alpha_1,alpha_2,...,alpha_N) = sigma(u_grad, theta),
 # reflected by the function 'stress'. The functions 'custom_init'and 'set_params'
 # override base class methods. In particular, set_params sets the design variable theta.
 
-from softVoronoi_cell import generate_voronoi_separate
+from softVoronoi_cell import generate_voronoi_separate,generate_para_rho
 plt.ion()
 fig, ax = plt.subplots()
 
@@ -46,7 +50,7 @@ class Elasticity(Problem):
             Emax = 70e3
             Emin = 1e-5 * Emax
             nu = 0.3
-            penal = 1.
+            penal = 3.
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -108,13 +112,12 @@ for f in files:
 ele_type = 'QUAD4'
 cell_type = get_meshio_cell_type(ele_type)
 
-Nx = 1000
-Ny = 500
+Nx = 100
+Ny = 50
 resolution=0.03
 Lx, Ly = Nx*resolution, Ny*resolution
 
-meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
-mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
+
 
 
 # Define boundary conditions and values.
@@ -125,7 +128,7 @@ def fixed_location(point):
 
 
 def load_location(point):
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly, atol=0.1 * Ly + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
     # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
     #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
 
@@ -138,16 +141,10 @@ dirichlet_bc_info = [[fixed_location] * 2, [0, 1], [dirichlet_val] * 2]
 
 location_fns = [load_location]
 
-# Define forward problem.
-problem = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
-                     location_fns=location_fns)
-problem2 = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
-                      location_fns=location_fns)
 
-# Apply the automatic differentiation wrapper.
-# This is a critical step that makes the problem solver differentiable.
-fwd_pred = ad_wrapper(problem, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
-fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
+
+
+
 
 
 # Define the objective function 'J_total(theta)'.
@@ -242,22 +239,6 @@ def objectiveHandle2(p):
     return J, dJ
 
 
-# Prepare g and dg/d(theta) that are required by the MMA optimizer.
-# def consHandle(rho):
-#
-#     # MMA solver requires (c, dc) as inputs
-#     # c should have shape (numConstraints,)
-#     # dc should have shape (numConstraints, ...)
-#     def computeGlobalVolumeConstraint(rho):
-#         # thetas = generate_voronoi(op, p)
-#         # thetas = thetas.reshape(-1, 1)
-#         g = np.mean(rho) / vf - 1.
-#         return g
-#
-#     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(rho)
-#     c, gradc = c.reshape((1,)), gradc[None, ...]
-#     return c, gradc
-
 def consHandle1(rho):
 
     # MMA solver requires (c, dc) as inputs
@@ -287,18 +268,17 @@ def consHandle2(p):
 
 
 # Finalize the details of the MMA optimizer, and solve the TO problem.
-vf = 0.2
+vf = 0.5
 
-sites_num = 30
 dim = 2
 margin = 5
-coordinates = np.indices((Nx, Ny))
+coordinates = np.indices((Nx, Ny))*resolution
 
 
-def generate_points(Nx, Ny, sx, sy):
+def generate_points(Lx, Ly, sx, sy):
     # uniform points in 0,Nx 0,Ny
-    x = np.linspace(0 , Nx , sx)
-    y = np.linspace(0 , Ny , sy)
+    x = np.linspace(0 , Lx , sx)
+    y = np.linspace(0 , Ly , sy)
     points = np.meshgrid(x, y)
     xa = points[0].flatten()
     ya = points[1].flatten()
@@ -306,56 +286,78 @@ def generate_points(Nx, Ny, sx, sy):
     return points
 
 
-sites = generate_points(Nx, Ny, 10, 3)
-# onp.random.seed(0)
-# sites_x = onp.random.randint(low=0- margin, high=Nx+margin, size=(sites_num, 1))
-# sites_y = onp.random.randint(low=0- margin, high=Ny+margin, size=(sites_num, 1))
-# sites=np.concatenate((sites_x, sites_y), axis=-1,dtype=np.float64)
+
 time_start = time.time()
 
-sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
-sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))
-Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
-Dm_up = np.tile(np.array([[2000, 2000], [2000, 2000]]), (sites_low.shape[0], 1, 1))
-cp_low = sites_low
-cp_up = sites_up
-bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
-bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
+""""""""""""""""first step"""""""""""""""""""""
+meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
+mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
 
-Dm = np.tile(np.array(([1000, 0], [0, 1000])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-cp = sites.copy()
+problem = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
+                     location_fns=location_fns)
+fwd_pred = ad_wrapper(problem, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
+
 numConstraints = 1
-optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
-                      "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams = {'maxIters': 30, 'movelimit': 0.1, "lastIters":0,"stage":0,
+                      "coordinates": coordinates, "sites_num": 0,
                       "dim": dim,
-                      "Nx": Nx, "Ny": Ny, "margin": margin,
-                      "heaviside": True, "control": False,
-                      "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, sites_num * 2),
-                      "cp": cp,"Dm":Dm, "immortal": ["cp","Dm"]}
-# "cauchy_points": cauchy_points, "immortal": ["cauchy_points"]
+                      "Nx": Nx, "Ny": Ny, "margin": margin,}
 problem.op = optimizationParams
-# p_ini= np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cauchy_points)),axis=0)# 1-d array contains flattened: sites,Dm,cauchy points
-# p_ini = np.concatenate((np.ravel(sites), np.ravel(Dm)), axis=0)  # 1-d array contains flattened: sites,Dm,cauchy points
-p_ini = np.ravel(sites) # 1-d array contains flattened: sites,Dm,cauchy points
+rho_ini = vf*np.ones((Nx*Ny, 1))
 
-p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,
-                     generate_voronoi_separate)
-""""""""""""""""""""""""""""""""""""""""""""""""""
+rho_oped, j = optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints, )
+"""""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
-sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
+
+# 计算缩放比例
+scale_y = 2
+scale_x = 2
+rho_oped=rho_oped.reshape(Nx,Ny)
+Nx2,Ny2=Nx*scale_x,Ny*scale_y
+coordinates = np.indices((Nx2, Ny2))*resolution
+# 使用 zoom 进行缩放
+rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
+rho_oped=rho_oped.ravel()
+
+
+"""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""
+meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx, domain_y=Ly)
+mesh2 = Mesh(meshio_mesh2.points, meshio_mesh2.cells_dict[cell_type])
+problem2 = Elasticity(mesh2, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
+                      location_fns=location_fns)
+fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
+# sites=generate_points(Lx,Ly,10,3)
+# sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))
+# sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))
+#
+# Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
+# Dm_up = np.tile(np.array([[2000, 2000], [2000, 2000]]), (sites_low.shape[0], 1, 1))
+# cp_low = sites_low
+# cp_up = sites_up
+# rho_low=np.zeros((Nx*Ny))
+# rho_up=np.ones((Nx*Ny))
+# bound_low = np.concatenate((np.ravel(rho_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
+# bound_up = np.concatenate((np.ravel(rho_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
+# Dm = np.tile(np.array(([1000, 0], [0, 1000])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+
+# cp = sites.copy()
+
 # Dm = rho_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
-                       "coordinates": coordinates, "sites_num": sites_num,
+optimizationParams2 = {'maxIters': 35, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1,
+                       "coordinates": coordinates,"resolution":resolution,
+                       # "sites_num": sites_num,
                        "dim": dim,
-                       "Nx": Nx, "Ny": Ny, "margin": margin,
-                       "heaviside": True, "control": True,
-                       "bound_low": bound_low, "bound_up": bound_up, "paras_at": (sites_num * 6, sites_num * 8),
-                       "sites": sites, "Dm": Dm, "immortal": ["sites", "Dm"]}
+                       "Nx": Nx2, "Ny": Ny2, "margin": margin,
+                       "heaviside": False, "control": False,
+                       # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
+                        "immortal": []}
+"""""""""""""""""""""""""""""""""revise para"""""""""""""""""""""""""""""""""
+p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
+
 problem2.op = optimizationParams2
-problem2.setTarget(j * 1.5)
+problem2.setTarget(0)
 # cauchy_points=sites.copy()
-p_ini2 = np.ravel(cp)  # 1-d array contains flattened: sites,Dm,cauchy points
-# p_ini2= np.concatenate((rho_oped,np.ravel(cauchy_points)), axis=0)
+
 p_final,j_now =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)
 

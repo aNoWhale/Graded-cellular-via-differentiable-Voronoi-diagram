@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 
 @jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
-    gamma = 2 ** (epoch // 50)
+    gamma = 2 ** (epoch // 10)
     field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
                 np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
     return field
@@ -154,7 +154,12 @@ def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     assert field.shape[-1] == 2
     cell = field.reshape(-1, 2)  # cell_num * 2
     calc_rho=lambda cell,sites: rho_fn(cell, sites, tuple(kwargs.values()))
-    rho = jax.vmap(calc_rho, in_axes=(0, None))(cell, sites)
+
+    # rho = jax.vmap(calc_rho, in_axes=(0, None))(cell, sites)
+    rho=[]
+    for i in range(0,cell.shape[0]):
+        rho.append(calc_rho(cell[i,:], sites))
+    rho=np.array(rho)
     return rho
 
 
@@ -175,7 +180,6 @@ def generate_voronoi_separate(para, p, **kwargs):
     Dm = para["Dm"] if "Dm" in para else p[sites_len:sites_len + Dm_len].reshape(shapes[1][0], shapes[1][1],
                                                                                     shapes[1][2])
 
-
     coordinates = np.stack(coordinates, axis=-1)
     if "cp" in para and para["control"]:
         cp = para["cp"] if "cp" in para else (
@@ -190,6 +194,34 @@ def generate_voronoi_separate(para, p, **kwargs):
     return field.reshape(para["Nx"],para["Ny"])
 
 
+def generate_para_rho(para, rho_p, **kwargs):
+    # generate seed
+    rho=rho_p
+    rho=rho.reshape(para["Nx"],para["Ny"])
+    key = jax.random.PRNGKey(0)
+    random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
+    # rho*float + x determines the point generation rate.
+    void=0.1
+    entity=3.0
+    sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
+
+    para["sites_num"]=sites.shape[0]
+    move_around=20
+    sites_low = sites.ravel()-move_around*para["resolution"]
+    sites_up = sites.ravel()+move_around*para["resolution"]
+    Dm = np.tile(np.array(([30, 0], [0, 30])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
+    Dm_up = np.tile(np.array([[100, 100], [100, 100]]), (sites_low.shape[0], 1, 1))
+    cp = sites.copy()
+    cp_low = sites_low
+    cp_up = sites_up
+    para["bound_low"] = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
+    para["bound_up"] = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
+    para["paras_at"] = (0, para["sites_num"]*6)
+    # p = np.concatenate((sites.ravel(), Dm.ravel(),cp.ravel()))
+    p = np.concatenate((sites.ravel(), Dm.ravel()))
+    print("seeds:",sites.shape[0])
+    return p,para
 
 
 if __name__ == '__main__':

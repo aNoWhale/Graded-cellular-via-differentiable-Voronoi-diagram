@@ -46,31 +46,27 @@ def compute_filter_kd_tree(fe):
         I += [i] * num_nbs
         J += ii.tolist()
         V += vals.tolist()
-    H_sp = scipy.sparse.csc_matrix((V, (I, J)), shape=(flex_num_cells, flex_num_cells))
+    H_sp = scipy.sparse.csc_array((V, (I, J)), shape=(flex_num_cells, flex_num_cells))
 
-    H=H_sp
-    Hs = np.array(H_sp.sum(axis=1))
-    # H = H_sp.todense()
-    # Hs = np.sum(H, 1)
+    # Will cause memory issue for large size problem.
+    # High priority!
+    # TODO NOt revied yet
+    H = H_sp.todense()
+    Hs = np.sum(H, 1)
+    # H = H_sp
+    # Hs = np.array(H_sp.sum(axis=1))
     return H, Hs
 
 
-def applySensitivityFilter(ft, p, dJ, dvc):
+def applySensitivityFilter(ft, rho, dJ, dvc):
     # changkun changed here
-    # print("ft['H'].shape:", ft['H'].shape)
-    # print("ft['Hs'].shape:", ft["Hs"].shape)
-    # print("ft['Hs'][:,N].shape:", ft["Hs"][:,None].shape)
-    # print("p.shape:", p.shape)
-    # print("dvc.shape:", dvc.shape)
-    # print("dJ.shape:", dJ.shape)
-    # dJ = np.matmul(ft['H'], p * dJ / np.maximum(1e-3, p) / ft['Hs'][:, None])
-    dJ = ft['H'].dot(p * dJ / np.maximum(1e-3, p) / ft['Hs']) # # for sparse matrix
-    # dvc = np.matmul(ft['H'][None, :, :], p[None, :, :] * dvc / np.maximum(1e-3, p[None, :, :]) / ft['Hs'][None, :, None])
-    temp=p * dvc / np.maximum(1e-3, p) / ft['Hs']
-    dvc = ft['H'].dot(temp.squeeze(axis=0)) # for sparse matrix
-    # print("..........")
-    # print("dJ.shape:", dJ.shape)
-    # print("dvc.shape:", dvc.shape)
+    dJ = np.matmul(ft['H'], rho*dJ/np.maximum(1e-3, rho)/ft['Hs'][:, None])
+    dvc = np.matmul(ft['H'][None, :, :], rho[None, :, :]*dvc/np.maximum(1e-3, rho[None, :, :])/ft['Hs'][None, :, None])
+    # dJ = ft['H'].dot(rho * dJ / np.maximum(1e-3, rho) / ft['Hs']) # # for sparse matrix
+    # temp=rho * dvc / np.maximum(1e-3, rho) / ft['Hs']
+    # dvc = ft['H'].dot(temp.squeeze(axis=0)) # for sparse matrix
+    print("dJ.shape", dJ.shape)
+    print("dvc.shape", dvc.shape)
     return dJ, dvc
 
 
@@ -435,63 +431,56 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
 
 
 ###changkun sun rewritten here
-def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, generate_rho):
-    H, Hs = compute_filter_kd_tree(fe) # related with rho
+def optimize_rho(fe, rho_ini, optimizationParams, objectiveHandle, consHandle, numConstraints,):
+    H, Hs = compute_filter_kd_tree(fe)
     ft = {'H': H, 'Hs': Hs}
-    p=p_ini
-    m = numConstraints
-    n = len(p.reshape(-1))
+
+    rho = rho_ini
+
+
+    m = numConstraints  # num constraints
+    n = len(rho.reshape(-1))  # num params
 
     mma = MMA()
     mma.setNumConstraints(numConstraints)
     mma.setNumDesignVariables(n)
+    mma.setMinandMaxBoundsForDesignVariables(np.zeros((n, 1)), np.ones((n, 1)))
 
-    bound_low= optiPara["bound_low"][optiPara["paras_at"][0]:optiPara["paras_at"][1]] if "paras_at" in optiPara else optiPara["bound_low"]
-    bound_up= optiPara["bound_up"][optiPara["paras_at"][0]:optiPara["paras_at"][1]] if "paras_at" in optiPara else optiPara["bound_up"]
-    mma.setMinandMaxBoundsForDesignVariables(bound_low,bound_up)
-
-    xval = p.reshape(-1)[:, None]
+    xval = rho.reshape(-1)[:, None]
     xold1, xold2 = xval.copy(), xval.copy()
     mma.registerMMAIter(xval, xold1, xold2)
     mma.setLowerAndUpperAsymptotes(np.ones((n, 1)), np.ones((n, 1)))
-    mma.setScalingParams(1.0, np.zeros((m, 1)), 10000 * np.ones((m, 1)), np.zeros((m, 1)))
-    mma.setMoveLimit(optiPara['movelimit'])
-    with tqdm(total=optiPara['maxIters']) as pbar:
+    mma.setScalingParams(1.0, np.zeros((m, 1)),
+                         10000 * np.ones((m, 1)), np.zeros((m, 1)))
+    # Move limit is an important parameter that affects TO result; default can be 0.2
+    mma.setMoveLimit(optimizationParams['movelimit'])
+
+    with tqdm(total=optimizationParams['maxIters']) as pbar:
         loop = 0
-        while loop < optiPara['maxIters']:
-            loop += 1
+        while loop < optimizationParams['maxIters']:
+            loop = loop + 1
             pbar.update(1)
             print(f"MMA solver...")
-            rho = generate_rho(optiPara, p, epoch=loop)
             ####render windows and save fig
-            sites=p[0:optiPara["sites_num"]*optiPara["dim"]].reshape(optiPara["sites_num"],optiPara["dim"])
             plt.clf()
-            plt.imshow(rho,cmap='viridis')
-            plt.title(f"loop:{loop + optiPara['lastIters']}/{optiPara['maxIters'] + optiPara['lastIters']}")
-            plt.scatter(sites[:,1]/optiPara["resolution"],sites[:,0]/optiPara["resolution"],color='r',marker='+')
+            plt.imshow(rho.reshape(optimizationParams["Nx"],optimizationParams["Ny"]), cmap='viridis')
+            plt.title(
+                f"loop:{loop + optimizationParams['lastIters']}/{optimizationParams['maxIters'] + optimizationParams['lastIters']}")
             plt.colorbar()
             plt.draw()
-            plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}.png', dpi=300, bbox_inches='tight')
+            plt.savefig(f'data/vtk/{loop + optimizationParams["lastIters"]}.png', dpi=300, bbox_inches='tight')
             plt.pause(0.01)
 
-            rho=rho.flatten()[:, None]
-            assert rho.shape[1]==1
-            J, dJ = objectiveHandle(rho) # get from rho = fun(p)
-            vc, dvc = consHandle(rho) # get from rho
+            # rho = rho.flatten()[:, None]
+            # assert rho.shape[1]==1
+            J, dJ = objectiveHandle(rho)
+            vc, dvc = consHandle(rho)
 
-            dJ_drho, dvc_drho = applySensitivityFilter(ft, rho, dJ, dvc)
-            def rho_faltten(op, p,epoch):
-                fl=generate_rho(op,p,epoch=epoch)
-                return fl.flatten()
-            """这里控制着对哪个参数求导"""
-            drho_dp = jax.jacfwd(rho_faltten, argnums=1)(optiPara, p, epoch=loop)
-            dJ= np.dot(dJ_drho.T, drho_dp)
-            dvc = np.dot(dvc_drho.squeeze().T, drho_dp)
+            dJ, dvc = applySensitivityFilter(ft, rho, dJ, dvc)
 
-            # J, dJ = J, dJ.reshape(-1)[:, None]
-            # vc, dvc = vc[:, None], dvc.reshape(dvc.shape[0], -1)
             J, dJ = J, dJ.reshape(-1)[:, None]
-            vc, dvc = vc[:, None], dvc.squeeze()[None,:]
+            vc, dvc = vc[:, None], dvc.reshape(dvc.shape[0], -1)
+
             print(f"J.shape = {J.shape}")
             print(f"dJ.shape = {dJ.shape}")
             print(f"vc.shape = {vc.shape}")
@@ -511,13 +500,14 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             xval = xmma.copy()
 
             mma.registerMMAIter(xval, xold1, xold2)
-            p = xval.reshape(p.shape)  # 更新控制参数
+            rho = xval.reshape(rho.shape)
 
             end = time.time()
 
             time_elapsed = end - start
 
             print(f"MMA took {time_elapsed} [s]")
+
             print(f'Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n\n')
 
-    return p,J
+    return rho,J
