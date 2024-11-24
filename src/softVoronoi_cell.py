@@ -164,13 +164,13 @@ def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     num_devices = len(devices)
     if num_devices == 1:
         # 使用 vmap 和 jit 加速计算
-        calc_rho_batch = jax.jit(jax.vmap(calc_rho, in_axes=(0, None)))
+        calc_rho_batch = jax.jit(jax.vmap(calc_rho, in_axes=(0, None,None)))
         # 分块处理，避免内存占用过高
         batch_size = kwargs.get('batch_size', 100)  # 支持通过 kwargs 控制 batch_size，默认为 100
         rho_list = []
         for i in tqdm.tqdm(range(0, cell.shape[0], batch_size), desc="Calculating Voronoi Diagram"):
             batch_cells = jax.device_put(cell[i:i + batch_size])  # 将当前批次放到设备上
-            rho_batch = calc_rho_batch(batch_cells, sites)  # 批量计算
+            rho_batch = calc_rho_batch(batch_cells, sites,tuple(kwargs.values()))  # 批量计算
             rho_list.append(rho_batch)
     else:
         # 使用 pmap 实现多设备并行计算
