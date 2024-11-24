@@ -99,7 +99,7 @@ def d_euclidean_cell(cell, sites, *args):
 
 
 def d_mahalanobis_cell(cell, sites, Dm, *args):
-    Dm=Dm[0]
+    # Dm=Dm[0]
     diff = sites[:, None, :] - cell[None, None, :]  # n*1*dim
     dist_m_cell = np.sqrt((diff @ Dm.swapaxes(-1, -2) @ Dm @ diff.swapaxes(-1, -2))).squeeze()
     return dist_m_cell
@@ -107,7 +107,7 @@ def d_mahalanobis_cell(cell, sites, Dm, *args):
 
 def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     alot = 1e-9  # avoid nan
-    Dm = Dm[0]
+    # Dm = Dm[0]
     diff_sx = cell[None, None, :] - sites[:, None, :]  # N*1*dim
     dist_m_cell = np.sqrt((diff_sx @ Dm.swapaxes(-1, -2) @ Dm @ diff_sx.swapaxes(-1, -2))).squeeze()
     diff_sc = cp[:, None, :] - sites[:, None, :]  # N*1*dim
@@ -124,30 +124,34 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
 
 @jax.jit
 def rho_cell_mm(cell, sites, *args):
-    dist_f = d_mahalanobis_masked_cell(cell,sites,*args)  # N
+    dist_f = d_mahalanobis_masked_cell(cell,sites,*args[0])  # N
     # etas = np.array([1e-50])
     # dist = np.concatenate((dist_f, etas), axis=0)
+    print(f"dist_f.shape:{dist_f.shape}")
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 7 # 10 #5 razer 7
+    beta = 2 # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
+    print(rho.shape)
     return rho
 
 @jax.jit
 def rho_cell_m(cell, sites, *args):
-    dist_f = d_mahalanobis_cell(cell,sites,*args)  # N
+    dist_f = d_mahalanobis_cell(cell,sites,*args[0])  # N
     # etas = np.array([1e-50])
     # dist = np.concatenate((dist_f, etas), axis=0)
+    print(f"dist_f.shape:{dist_f.shape}")
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 7  # 10 #5 razer 7
+    beta = 2  # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
+    print(rho.shape)
     return rho
 
 
@@ -218,7 +222,7 @@ def generate_voronoi_separate(para, p, **kwargs):
                                                                                     shapes[1][2])
 
     coordinates = np.stack(coordinates, axis=-1)
-    if "cp" in para and para["control"]:
+    if "cp" in para or para["control"]:
         cp = para["cp"] if "cp" in para else (
             p[sites_len + Dm_len:sites_len + Dm_len + c_len].reshape(shapes[2][0], shapes[2][1]))
         field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
@@ -239,7 +243,7 @@ def generate_para_rho(para, rho_p, **kwargs):
     random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
     # rho*float + x determines the point generation rate.
     void=0.05
-    entity=3.0
+    entity=2.5
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
 
     para["sites_num"]=sites.shape[0]

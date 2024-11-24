@@ -5,6 +5,7 @@ import numpy as onp
 import jax
 import jax.numpy as np
 import os
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=80"
 import sys
 import glob
 import matplotlib
@@ -49,7 +50,7 @@ class Elasticity(Problem):
             Emax = 70e3
             Emin = 1e-5 * Emax
             nu = 0.3
-            penal = 1.
+            penal = 3.
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -139,7 +140,7 @@ margin = 5
 """define model"""
 Nx = 100
 Ny = 50
-resolution=0.03
+resolution=0.02
 Lx, Ly = Nx*resolution, Ny*resolution
 coordinates = np.indices((Nx, Ny))*resolution
 meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
@@ -151,8 +152,8 @@ def fixed_location(point):
     # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
     #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
 def load_location(point):
-    # return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly/2, atol=0.1 * Ly/2 + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
+    # return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly/2, atol=0.1 * Ly/2 + 1e-5))
     # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
     #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
 def dirichlet_val(point):
@@ -222,7 +223,7 @@ sites_num=sx*sy
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))*resolution
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))*resolution
 Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
-Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
+Dm_up = np.tile(np.array([[100, 100], [100, 100]]), (sites_low.shape[0], 1, 1))
 cp_low = sites_low
 cp_up = sites_up
 bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low),np.ravel(cp_low)), axis=0)[:, None]
@@ -230,7 +231,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([30, 0], [0, 30])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 100, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"resolution":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -240,7 +241,9 @@ optimizationParams = {'maxIters': 100, 'movelimit': 0.1, "lastIters":0,"stage":0
 problem.op = optimizationParams
 p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
-p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,generate_voronoi_separate )
+# p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,generate_voronoi_separate )
+rho_ini = vf*np.ones((len(problem.fe.flex_inds), 1))
+rho_oped,j=optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints )
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
@@ -256,7 +259,7 @@ rho_oped=rho_oped.ravel()
 
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
-meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx, domain_y=Ly)
+meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
 mesh2 = Mesh(meshio_mesh2.points, meshio_mesh2.cells_dict[cell_type])
 """define problem"""
 # Define boundary conditions and values.
@@ -265,8 +268,8 @@ def fixed_location2(point):
     # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
     #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
 def load_location2(point):
-    # return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly/2., atol=0.1 * Ly/2 + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly2 + 1e-5))
+    # return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], Ly2/2., atol=0.1 * Ly2/2 + 1e-5))
     # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
     #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
 def dirichlet_val2(point):
@@ -329,7 +332,7 @@ optimizationParams2 = {'maxIters': 100, 'movelimit': 0.1, "lastIters":optimizati
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
-                       "heaviside": True, "control": True,
+                       "heaviside": True, "control": False,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                         "immortal": []}
 """revise para"""
