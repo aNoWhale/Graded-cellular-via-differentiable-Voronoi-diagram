@@ -358,6 +358,7 @@ problem2.op = optimizationParams2
 problem2.setTarget(0)
 # cauchy_points=sites.copy()
 
+
 p_final,j_now =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)
 
