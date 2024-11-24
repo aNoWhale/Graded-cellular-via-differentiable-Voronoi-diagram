@@ -42,7 +42,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     diff_sc = cp[:, None, :] - sites[:, None, :]  # N*1*dim
     dist_sc = np.linalg.norm(diff_sc, axis=-1).squeeze() + alot  # N
     dist_sx = np.linalg.norm(diff_sx, axis=-1).squeeze() + alot  # N
-    cos = np.abs((diff_sc @ diff_sx.swapaxes(-1, -2)) / (dist_sx * dist_sc)).squeeze()  # N
+    cos = np.abs((diff_sc @ diff_sx.swapaxes(-1, -2)).squeeze() / (dist_sx * dist_sc)).squeeze()  # N
     sigma = 1. / 30  # 1/100   1/3   1/30
     mu = 1
     scale = 1  # 1
@@ -110,7 +110,7 @@ def generate_voronoi_separate(para, p, **kwargs):
 
 
     coordinates = np.stack(coordinates, axis=-1)
-    if "cp" in para and para["control"]:
+    if "cp" in para or para["control"]:
         cp = para["cp"] if "cp" in para else (
             p[sites_len + Dm_len:sites_len + Dm_len + c_len].reshape(shapes[2][0], shapes[2][1]))
         field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
     # field=voronoi_field(coordinates, sites, Dm=Dm)
     # field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
-    field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm).reshape(Nx,Ny)
+    field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm,cp=cp).reshape(Nx,Ny)
     field=heaviside_projection(field, eta=0.5, epoch=120)
 
     print(f"algorithm use ：{time.time() - start_time:.6f} 秒")

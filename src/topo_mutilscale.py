@@ -332,14 +332,14 @@ optimizationParams2 = {'maxIters': 100, 'movelimit': 0.1, "lastIters":optimizati
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
-                       "heaviside": True, "control": False,
+                       "heaviside": True, "control": True,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                         "immortal": []}
 """revise para"""
 p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
 
 problem2.op = optimizationParams2
-problem2.setTarget(0)
+problem2.setTarget(j*1.5)
 # cauchy_points=sites.copy()
 
 p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,

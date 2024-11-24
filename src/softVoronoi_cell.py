@@ -113,7 +113,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     diff_sc = cp[:, None, :] - sites[:, None, :]  # N*1*dim
     dist_sc = np.linalg.norm(diff_sc, axis=-1).squeeze() + alot  # N
     dist_sx = np.linalg.norm(diff_sx, axis=-1).squeeze() + alot  # N
-    cos = np.abs((diff_sc @ diff_sx.swapaxes(-1, -2)) / (dist_sx * dist_sc)).squeeze()  # N
+    cos = np.abs((diff_sc @ diff_sx.swapaxes(-1, -2)).squeeze() / (dist_sx * dist_sc)).squeeze()  # N
     sigma = 1. / 30  # 1/100   1/3   1/30
     mu = 1
     scale = 1  # 1
