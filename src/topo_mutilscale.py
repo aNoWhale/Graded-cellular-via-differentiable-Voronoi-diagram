@@ -137,8 +137,8 @@ margin = 5
 
 """"""""""""""""first step"""""""""""""""""""""
 """define model"""
-Nx = 200
-Ny = 100
+Nx = 100
+Ny = 50
 resolution=0.03
 Lx, Ly = Nx*resolution, Ny*resolution
 coordinates = np.indices((Nx, Ny))*resolution
@@ -244,10 +244,11 @@ p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHa
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
-scale_y = 1
-scale_x = 1
+scale_y = 2
+scale_x = 2
 rho_oped=rho_oped.reshape(Nx,Ny)
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
+Lx2,Ly2=Nx2*resolution,Ny2*resolution
 coordinates = np.indices((Nx2, Ny2))*resolution
 # 使用 zoom 进行缩放
 rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
@@ -258,6 +259,20 @@ rho_oped=rho_oped.ravel()
 meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx, domain_y=Ly)
 mesh2 = Mesh(meshio_mesh2.points, meshio_mesh2.cells_dict[cell_type])
 """define problem"""
+# Define boundary conditions and values.
+def fixed_location2(point):
+    return np.isclose(point[0], 0., atol=1e-5)
+    # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
+    #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
+def load_location2(point):
+    # return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly/2., atol=0.1 * Ly/2 + 1e-5))
+    # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
+    #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
+def dirichlet_val2(point):
+    return 0.
+dirichlet_bc_info2 = [[fixed_location2] * 2, [0, 1], [dirichlet_val2] * 2]
+location_fns2 = [load_location2]
 def J_total2(params):
     """
     目标函数
@@ -306,8 +321,8 @@ def consHandle2(p):
     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(p)
     c, gradc = c.reshape((1,)), gradc[None, ...]
     return c, gradc
-problem2 = Elasticity(mesh2, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
-                      location_fns=location_fns)
+problem2 = Elasticity(mesh2, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info2,
+                      location_fns=location_fns2)
 fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
 optimizationParams2 = {'maxIters': 100, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates,"resolution":resolution,
