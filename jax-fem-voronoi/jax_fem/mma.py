@@ -468,7 +468,7 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             plt.clf()
             plt.imshow(rho,cmap='viridis')
             plt.title(f"loop:{loop + optiPara['lastIters']}/{optiPara['maxIters'] + optiPara['lastIters']}")
-            # plt.scatter(sites[:,1]/optiPara["resolution"],sites[:,0]/optiPara["resolution"],color='r',marker='+')
+            plt.scatter(sites[:,1]/optiPara["resolution"],sites[:,0]/optiPara["resolution"],color='r',marker='+')
             plt.colorbar()
             plt.draw()
             plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}.png', dpi=600, bbox_inches='tight')
@@ -520,4 +520,4 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             print(f"MMA took {time_elapsed} [s]")
             print(f'Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n\n')
 
-    return p,J
+    return p,J,rho

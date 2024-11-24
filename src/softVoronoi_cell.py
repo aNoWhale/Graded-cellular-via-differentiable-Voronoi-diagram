@@ -132,7 +132,7 @@ def rho_cell_mm(cell, sites, *args):
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 3  # 10 #5 razer 7
+    beta = 7 # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -146,7 +146,7 @@ def rho_cell_m(cell, sites, *args):
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 3  # 10 #5 razer 7
+    beta = 7  # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -254,9 +254,9 @@ def generate_para_rho(para, rho_p, **kwargs):
     cp_up = sites_up
     para["bound_low"] = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
     para["bound_up"] = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
-    para["paras_at"] = (0, para["sites_num"]*6)
+    para["paras_at"] = (0, para["sites_num"]*8)
     # p = np.concatenate((sites.ravel(), Dm.ravel(),cp.ravel()))
-    p = np.concatenate((sites.ravel(), Dm.ravel()))
+    p = np.concatenate((sites.ravel(), Dm.ravel(),cp.ravel()))
     print("seeds:",sites.shape[0])
     return p,para
 
