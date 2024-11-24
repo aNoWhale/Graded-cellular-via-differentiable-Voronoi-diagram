@@ -468,7 +468,7 @@ def optimize_rho(fe, rho_ini, optimizationParams, objectiveHandle, consHandle, n
                 f"loop:{loop + optimizationParams['lastIters']}/{optimizationParams['maxIters'] + optimizationParams['lastIters']}")
             plt.colorbar()
             plt.draw()
-            plt.savefig(f'data/vtk/{loop + optimizationParams["lastIters"]}.png', dpi=300, bbox_inches='tight')
+            plt.savefig(f'data/vtk/{loop + optimizationParams["lastIters"]}.png', dpi=600, bbox_inches='tight')
             plt.pause(0.01)
 
             # rho = rho.flatten()[:, None]

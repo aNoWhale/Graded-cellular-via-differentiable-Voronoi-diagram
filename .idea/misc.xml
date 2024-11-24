@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="voronoi39" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="jax-fem-voronoi" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="jax-fem-env" project-jdk-type="Python SDK" />
 </project>

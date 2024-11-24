@@ -343,12 +343,12 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # cp = sites.copy()
 
 # Dm = rho_oped[sites_num * dim:].reshape((sites_num, dim, dim))
-optimizationParams2 = {'maxIters': 100, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
+optimizationParams2 = {'maxIters': 100, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates,"resolution":resolution,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
-                       "heaviside": False, "control": False,
+                       "heaviside": True, "control": False,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                         "immortal": []}
 """""""""""""""""""""""""""""""""revise para"""""""""""""""""""""""""""""""""
@@ -371,5 +371,5 @@ fig=plt.figure(figsize=(16, 8))
 ax1=fig.add_subplot(1, 1, 1)
 ax1.plot(onp.arange(len(obj)) + 1, obj, linestyle='-', linewidth=2, color='black')
 plt.draw()
-plt.savefig(f'data/vtk/result.png', dpi=300, bbox_inches='tight')
+plt.savefig(f'data/vtk/result.png', dpi=600, bbox_inches='tight')
 # plt.show()
