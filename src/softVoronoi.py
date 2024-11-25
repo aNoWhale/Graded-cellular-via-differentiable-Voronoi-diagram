@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 
 
 def heaviside_projection(field, eta=0.5, epoch=0):
-    gamma = 2 ** (epoch // 50)
+    gamma = 2 ** (epoch // 10)
     field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
                 np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
     return field
@@ -20,12 +20,8 @@ def batch_softmax(matrices,**kwargs):  # 形状 (1, 100, 100)
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 形状 (1, 100, 100)
     soft = exp_matrices / sum_vals
     return soft
-
-
 def relu(x, y=0.):
     return np.maximum(y, x)
-
-
 def d_euclidean(x, xm):
     """
     euclidean distance
@@ -36,8 +32,6 @@ def d_euclidean(x, xm):
     diff = x[np.newaxis, :, :, :] - xm[:, np.newaxis, np.newaxis, :]  # Nc*n*n*dim
     dist_matrix = np.sqrt(np.sum(diff ** 2, axis=-1))  # Nc*n*n
     return dist_matrix
-
-
 def d_mahalanobis(x, xm, Dm):
     """
     mahalanobis distance
@@ -52,12 +46,9 @@ def d_mahalanobis(x, xm, Dm):
     nor = np.einsum("ijklm,ijkml->ijk", np.einsum('ijklm,imn->ijkln', diff, Dm.swapaxes(1, 2)), np.einsum('imn,ijknl->ijkml', Dm, diff.swapaxes(-1, -2)))
     dist_matrix = np.sqrt(nor)  # Nc*n*n*dim Nc*dim*dim
     return dist_matrix
-
 def normal_distribution(x,mu=0.,sigma=1.):
     return 1./(sigma*np.sqrt(2*np.pi))*np.exp(-(x-mu)**2/(2*sigma**2))
-
 def d_mahalanobis_masked(x, xm, xs,Dm):
-
     alot=1e-9 # avoid nan
     diff_xxm = x[np.newaxis, :, :, np.newaxis, :] - xm[:, np.newaxis, np.newaxis, np.newaxis, :]  # Nc*n*n*1*dim
     # dot1 = np.einsum('ijklm,imn->ijkln', diff_xxm, Dm.swapaxes(1, 2))
@@ -147,7 +138,7 @@ def voronoi_field(field, sites, **kwargs):
     #     else:
     #         dist = cauchy_mask(dist, kwargs["cauchy_points"], kwargs["cauchy_field"])
     soft = batch_softmax(dist,etas=kwargs["etas"] if "etas" in kwargs.keys() else None)
-    beta =5 #10 #5 razer 7
+    beta =7 #10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -157,8 +148,8 @@ def voronoi_field(field, sites, **kwargs):
 def generate_voronoi_separate(para, p, **kwargs):
     coordinates = para["coordinates"]
     sites_num = para["sites_num"]
-    Dm_dim = para["Dm_dim"]
-    # kwargs["etas"]=1e-20 #-15
+    Dm_dim = para["dim"]
+    # kwargs["etas"]=1e-30 #-15
 
     shapes = [(sites_num, Dm_dim), (sites_num, Dm_dim, Dm_dim), (sites_num, Dm_dim)]
     sites_len = (shapes[0][0] * shapes[0][1]) if "sites" not in para else 0

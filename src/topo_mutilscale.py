@@ -11,6 +11,8 @@ import glob
 import matplotlib
 from scipy.ndimage import zoom
 
+
+
 matplotlib.use('Qt5Agg') #for WSL
 import matplotlib.pyplot as plt
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +32,7 @@ from jax_fem.mma_original import optimize_rho
 # Here, we have f(u_grad,alpha_1,alpha_2,...,alpha_N) = sigma(u_grad, theta),
 # reflected by the function 'stress'. The functions 'custom_init'and 'set_params'
 # override base class methods. In particular, set_params sets the design variable theta.
-
+import softVoronoi
 from softVoronoi_cell import generate_voronoi_separate,generate_para_rho
 plt.ion()
 fig, ax = plt.subplots()
@@ -50,7 +52,7 @@ class Elasticity(Problem):
             Emax = 70e3
             Emin = 1e-5 * Emax
             nu = 0.3
-            penal = 3.
+            penal = 1.
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -115,7 +117,6 @@ cell_type = get_meshio_cell_type(ele_type)
 # Output solution files to local disk
 outputs = []
 # Finalize the details of the MMA optimizer, and solve the TO problem.
-vf = 0.5
 dim = 2
 
 
@@ -133,14 +134,14 @@ def generate_points(Lx, Ly, sx, sy):
 
 
 time_start = time.time()
-margin = 5
-
+margin = 2
 
 """"""""""""""""first step"""""""""""""""""""""
 """define model"""
+#Nx*Ny should %100 = 0
 Nx = 100
 Ny = 50
-resolution=0.02
+resolution=1
 Lx, Ly = Nx*resolution, Ny*resolution
 coordinates = np.indices((Nx, Ny))*resolution
 meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
@@ -152,8 +153,8 @@ def fixed_location(point):
     # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
     #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
 def load_location(point):
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
-    # return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly/2, atol=0.1 * Ly/2 + 1e-5))
+    # return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly/2, atol=0.1 * Ly/2 + 1e-5))
     # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
     #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
 def dirichlet_val(point):
@@ -199,6 +200,7 @@ def objectiveHandle(p):
     J, dJ = jax.value_and_grad(J_total)(p)
     output_sol(p, J)
     return J, dJ
+vf=0.3
 def consHandle1(rho):
 
     # MMA solver requires (c, dc) as inputs
@@ -215,23 +217,25 @@ def consHandle1(rho):
 problem = Elasticity(mesh, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info,
                      location_fns=location_fns)
 fwd_pred = ad_wrapper(problem, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
+# fwd_pred = ad_wrapper(problem, solver_options = {'jax_solver': {}})
+
 
 """define parameters"""
-sx,sy=10,3
+sx,sy=8,2
 sites=generate_points(Lx,Ly,sx,sy)
 sites_num=sx*sy
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))*resolution
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))*resolution
 Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
-Dm_up = np.tile(np.array([[100, 100], [100, 100]]), (sites_low.shape[0], 1, 1))
+Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
 cp_low = sites_low
 cp_up = sites_up
 bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low),np.ravel(cp_low)), axis=0)[:, None]
 bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)), axis=0)[:, None]
-Dm = np.tile(np.array(([30, 0], [0, 30])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"resolution":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -241,19 +245,20 @@ optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
 problem.op = optimizationParams
 p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
-# p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,generate_voronoi_separate )
-rho_ini = vf*np.ones((len(problem.fe.flex_inds), 1))
-rho_oped,j=optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints )
+p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
+# rho_ini = vf*np.ones((len(problem.fe.flex_inds), 1))
+# rho_oped,j=optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints )
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
-scale_y = 2
-scale_x = 2
-rho_oped=rho_oped.reshape(Nx,Ny)
+resolution=0.02
+scale_y = 4
+scale_x = 4
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
 Lx2,Ly2=Nx2*resolution,Ny2*resolution
 coordinates = np.indices((Nx2, Ny2))*resolution
 # 使用 zoom 进行缩放
+rho_oped=rho_oped.reshape(Nx,Ny)
 rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
 rho_oped=rho_oped.ravel()
 
@@ -268,8 +273,8 @@ def fixed_location2(point):
     # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
     #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
 def load_location2(point):
-    return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly2 + 1e-5))
-    # return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], Ly2/2., atol=0.1 * Ly2/2 + 1e-5))
+    # return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly2 + 1e-5))
+    return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], Ly2/2., atol=0.1 * Ly2/2 + 1e-5))
     # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
     #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
 def dirichlet_val2(point):
@@ -311,6 +316,7 @@ def objectiveHandle2(p):
     J, dJ = jax.value_and_grad(J_total2)(p)
     output_sol2(p, J)
     return J, dJ
+vf=0.25
 def consHandle2(p):
 
     # MMA solver requires (c, dc) as inputs

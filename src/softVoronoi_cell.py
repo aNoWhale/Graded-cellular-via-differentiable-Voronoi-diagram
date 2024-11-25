@@ -9,7 +9,7 @@ import tqdm
 
 @jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
-    gamma = 2 ** (epoch // 5)
+    gamma = 2 ** (epoch // 10)
     field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
                 np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
     return field
@@ -114,7 +114,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     dist_sc = np.linalg.norm(diff_sc, axis=-1).squeeze() + alot  # N
     dist_sx = np.linalg.norm(diff_sx, axis=-1).squeeze() + alot  # N
     cos = np.abs((diff_sc @ diff_sx.swapaxes(-1, -2)).squeeze() / (dist_sx * dist_sc)).squeeze()  # N
-    sigma = 1. / 30  # 1/100   1/3   1/30
+    sigma = 1. / 15  #  1/30
     mu = 1
     scale = 1  # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
@@ -125,33 +125,29 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
 @jax.jit
 def rho_cell_mm(cell, sites, *args):
     dist_f = d_mahalanobis_masked_cell(cell,sites,*args[0])  # N
-    # etas = np.array([1e-50])
-    # dist = np.concatenate((dist_f, etas), axis=0)
-    print(f"dist_f.shape:{dist_f.shape}")
+    etas = np.array([1e-20])
+    dist = np.concatenate((dist_f, etas), axis=0)
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 2 # 10 #5 razer 7
+    beta = 10 # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
-    print(rho.shape)
     return rho
 
 @jax.jit
 def rho_cell_m(cell, sites, *args):
     dist_f = d_mahalanobis_cell(cell,sites,*args[0])  # N
-    # etas = np.array([1e-50])
-    # dist = np.concatenate((dist_f, etas), axis=0)
-    print(f"dist_f.shape:{dist_f.shape}")
+    etas = np.array([1e-20])
+    dist = np.concatenate((dist_f, etas), axis=0)
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 2  # 10 #5 razer 7
+    beta = 10  # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
-    print(rho.shape)
     return rho
 
 
@@ -242,12 +238,12 @@ def generate_para_rho(para, rho_p, **kwargs):
     key = jax.random.PRNGKey(0)
     random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
     # rho*float + x determines the point generation rate.
-    void=0.05
-    entity=2.5
+    void=0.10
+    entity=1.5
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
 
     para["sites_num"]=sites.shape[0]
-    move_around=30 # seed movement
+    move_around=50 # seed movement
     sites_low = sites.ravel()-move_around*para["resolution"]
     sites_up = sites.ravel()+move_around*para["resolution"]
     Dm = np.tile(np.array(([30, 0], [0, 30])), (sites.shape[0], 1, 1))  # Nc*dim*dim
