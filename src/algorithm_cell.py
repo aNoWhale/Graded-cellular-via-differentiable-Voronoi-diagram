@@ -21,6 +21,8 @@ def normal_distribution(x,mu=0.,sigma=1.):
     return 1./(sigma*np.sqrt(2*np.pi))*np.exp(-(x-mu)**2/(2*sigma**2))
 
 
+def sigmoid(x):
+    return 1/(1+np.exp(-x))
 
 def d_euclidean_cell(cell, sites, *args):
     diff = sites[:, None, :] - cell[:, None, :]  # n*1*dim
@@ -36,7 +38,7 @@ def d_mahalanobis_cell(cell, sites, Dm, *args):
 
 def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     alot = 1e-9  # avoid nan
-    Dm = Dm[0]
+    # Dm = Dm[0]
     diff_sx = cell[None, None, :] - sites[:, None, :]  # N*1*dim
     dist_m_cell = np.sqrt((diff_sx @ Dm.swapaxes(1, 2) @ Dm @ diff_sx.swapaxes(1, 2))).squeeze()
     diff_sc = cp[:, None, :] - sites[:, None, :]  # N*1*dim
@@ -48,7 +50,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     scale = 1  # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
-    cos_mask = 1
+    cos_mask = sigmoid(10*(dist_sc-dist_sx))
     return (cos ** cos_mask) * dist_m_cell
 
 
@@ -61,21 +63,21 @@ def rho_cell_mm(cell, sites, *args):
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 3  # 10 #5 razer 7
+    beta = 5  # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
 
 def rho_cell_m(cell, sites, *args):
     dist_f = d_mahalanobis_cell(cell,sites,*args)  # N
-    # etas = np.array([1e-20])
-    # dist = np.concatenate((dist_f, etas), axis=0)
+    # etas = np.array([1e-10])
+    # dist_f = np.concatenate((dist_f, etas), axis=0)
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 3  # 10 #5 razer 7
+    beta = 5  # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -83,7 +85,7 @@ def rho_cell_m(cell, sites, *args):
 def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     assert field.shape[-1] == 2
     cell = field.reshape(-1, 2)  # cell_num * 2
-    calc_rho=lambda cell,sites: rho_fn(cell, sites, tuple(kwargs.values()))
+    calc_rho=lambda cell,sites: rho_fn(cell, sites, *kwargs.values())
     rh=[]
     for i in range(0,cell.shape[0]):
         rh.append(calc_rho(cell[i,:], sites))
@@ -129,30 +131,30 @@ if __name__ == '__main__':
     start_time = time.time()  # 计时起点
     np.random.seed(0)
     print(f"running！")
-    Nx,Ny=200,100
-    resolution=0.03
+    Nx,Ny=400,200
+    resolution=0.01
     x_len = Nx*resolution
     y_len = Ny*resolution
     coords = np.indices((Nx, Ny))*resolution
     coordinates = np.stack(coords, axis=-1)
     cauchy_field = coordinates.copy()
     # coordination
-    # sites=np.array(([5,5],[3,5]))
-    # cp=np.array(([4,2],[5,6]))
+    sites=np.array(([100,100],[300,100]))*resolution
+    cp=np.array(([300,100],[300,100]))*resolution
 
-    sites_x = np.random.randint(low=0, high=Nx, size=(36, 1))*resolution
-    sites_y = np.random.randint(low=0, high=Ny, size=(36, 1))*resolution
-    sites=np.concatenate((sites_x, sites_y), axis=-1)
-    cp = sites.copy()
-    cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
+    # sites_x = np.random.randint(low=0, high=Nx, size=(36, 1))*resolution
+    # sites_y = np.random.randint(low=0, high=Ny, size=(36, 1))*resolution
+    # sites=np.concatenate((sites_x, sites_y), axis=-1)
+    # cp = sites.copy()
+    # cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
 
-    Dm = np.tile(np.array(([10, 0], [0, 10])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     # Dm[0] = np.array(([100, 0], [0, 100]))
 
     # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
     # field=voronoi_field(coordinates, sites, Dm=Dm)
     # field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
-    field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm,cp=cp).reshape(Nx,Ny)
+    field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm,cp=cp).reshape(Nx,Ny)
     field=heaviside_projection(field, eta=0.5, epoch=120)
 
     print(f"algorithm use ：{time.time() - start_time:.6f} 秒")
@@ -160,6 +162,6 @@ if __name__ == '__main__':
     plt.imshow(field, cmap='viridis')  # 使用 'viridis' 颜色映射
     plt.colorbar(label='Pixel Value')  # 添加颜色条用于显示值的范围
     plt.title("Pixel Values Visualized with Colors")
-    plt.scatter(sites[:, 1]//resolution, sites[:, 0]//resolution, marker='^', color='r')
+    plt.scatter(sites[:, 1]//resolution, sites[:, 0]//resolution, marker='+', color='r')
     print(f"total used：{time.time() - start_time:.6f} 秒")
     plt.show()

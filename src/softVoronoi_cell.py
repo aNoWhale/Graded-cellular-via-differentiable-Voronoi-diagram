@@ -119,7 +119,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     scale = 1  # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
-    cos_mask = 1
+    cos_mask = sigmoid(10*(dist_sc-dist_sx))
     return (cos ** cos_mask) * dist_m_cell
 
 
@@ -151,55 +151,7 @@ def rho_cell_m(cell, sites, *args):
     return rho
 
 
-# def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
-#     assert field.shape[-1] == 2
-#     cell = field.reshape(-1, 2)  # cell_num * 2
-#
-#     def calc_rho(cell, sites, *args):
-#         return rho_fn(cell, sites, *args)
-#
-#     # 检测可用设备
-#     devices = jax.devices()
-#     print(f"devices:{devices}")
-#     num_devices = len(devices)
-#     if num_devices == 1:
-#         # 使用 vmap 和 jit 加速计算
-#         calc_rho_batch = jax.jit(jax.vmap(calc_rho, in_axes=(0, None,None)))
-#         # 分块处理，避免内存占用过高
-#         batch_size = kwargs.get('batch_size', 100)  # 支持通过 kwargs 控制 batch_size，默认为 100
-#         rho_list = []
-#         for i in tqdm.tqdm(range(0, cell.shape[0], batch_size), desc="Calculating Voronoi Diagram"):
-#             batch_cells = jax.device_put(cell[i:i + batch_size])  # 将当前批次放到设备上
-#             rho_batch = calc_rho_batch(batch_cells, sites,tuple(kwargs.values()))  # 批量计算
-#             rho_list.append(rho_batch)
-#     else:
-#         # 使用 pmap 实现多设备并行计算
-#         calc_rho_pmap = jax.pmap(
-#             jax.vmap(calc_rho, in_axes=(0, None, None)),  # 设备内批量处理
-#             in_axes=(0, None, None)  # 设备间数据分片
-#         )
-#         # 批次大小调整为设备数的倍数
-#         batch_size = kwargs.get('batch_size', 100)
-#         effective_batch_size = batch_size * num_devices
-#         rho_list = []
-#         # 按批次处理数据
-#         for i in tqdm.tqdm(range(0, cell.shape[0], effective_batch_size), desc="Calculating Voronoi Diagram"):
-#             batch_cells = cell[i:i + effective_batch_size]
-#             # 将数据分割为设备数量的子批次
-#             sub_batches = np.array_split(batch_cells, num_devices)
-#             # 填充不足的子批次，保持一致长度
-#             while len(sub_batches) < num_devices:
-#                 sub_batches.append(np.zeros_like(sub_batches[0]))
-#             # 转为 JAX 数组并放置在对应设备上
-#             sub_batches = jax.device_put(np.array(sub_batches))
-#             # 使用 pmap 并行计算
-#             rho_batch = calc_rho_pmap(sub_batches, sites, tuple(kwargs.values()))
-#             # 收集计算结果，合并所有设备的输出
-#             rho_list.append(rho_batch.reshape(-1, rho_batch.shape[-1]))
-#
-#     # 合并所有批次结果
-#     rho = np.concatenate(rho_list, axis=0)
-#     return rho.reshape(field.shape[:-1])
+
 def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     assert field.shape[-1] == 2
     cell = field.reshape(-1, 2)  # cell_num * 2
