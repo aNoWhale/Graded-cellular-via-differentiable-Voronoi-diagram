@@ -7,7 +7,7 @@ import jax.numpy as np
 from matplotlib import pyplot as plt
 import tqdm
 
-@jax.jit
+
 def heaviside_projection(field, eta=0.5, epoch=0):
     gamma = 2 ** (epoch // 20)
     field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
@@ -122,7 +122,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     cos_mask = 1
     return (cos ** cos_mask) * dist_m_cell
 
-@jax.jit
+
 def rho_cell_mm(cell, sites, *args):
     dist_f = d_mahalanobis_masked_cell(cell,sites,*args[0])  # N
     # etas = np.array([1e-30])
@@ -136,7 +136,7 @@ def rho_cell_mm(cell, sites, *args):
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
-@jax.jit
+
 def rho_cell_m(cell, sites, *args):
     dist_f = d_mahalanobis_cell(cell,sites,*args[0])  # N
     # etas = np.array([1e-30])
@@ -208,7 +208,7 @@ def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     num_devices = len(devices)
     batch_size = kwargs.get('batch_size', 100)
     if num_devices == 1:
-        calc_rho_batch = jax.jit(calc_rho)
+        calc_rho_batch = calc_rho
         def process_batch(i):
             # batch_cells = cell[i:i + batch_size]
             batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i,2],slice_sizes=[batch_size,2])
