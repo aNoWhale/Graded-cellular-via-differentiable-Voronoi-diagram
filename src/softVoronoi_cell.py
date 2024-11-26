@@ -9,7 +9,7 @@ import tqdm
 
 @jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
-    gamma = 2 ** (epoch // 10)
+    gamma = 2 ** (epoch // 20)
     field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
                 np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
     return field
@@ -125,28 +125,28 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
 @jax.jit
 def rho_cell_mm(cell, sites, *args):
     dist_f = d_mahalanobis_masked_cell(cell,sites,*args[0])  # N
-    etas = np.array([1e-20])
-    dist = np.concatenate((dist_f, etas), axis=0)
+    # etas = np.array([1e-30])
+    # dist_f = np.concatenate((dist_f, etas), axis=0)
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 10 # 10 #5 razer 7
+    beta = 5 # 10 #5 razer 7 6
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
 @jax.jit
 def rho_cell_m(cell, sites, *args):
     dist_f = d_mahalanobis_cell(cell,sites,*args[0])  # N
-    etas = np.array([1e-20])
-    dist = np.concatenate((dist_f, etas), axis=0)
+    # etas = np.array([1e-30])
+    # dist_f = np.concatenate((dist_f, etas), axis=0)
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 10  # 10 #5 razer 7
+    beta = 5  # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -238,17 +238,17 @@ def generate_para_rho(para, rho_p, **kwargs):
     key = jax.random.PRNGKey(0)
     random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
     # rho*float + x determines the point generation rate.
-    void=0.10
-    entity=1.5
+    void=0.1
+    entity=0.4
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
 
     para["sites_num"]=sites.shape[0]
     move_around=50 # seed movement
     sites_low = sites.ravel()-move_around*para["resolution"]
     sites_up = sites.ravel()+move_around*para["resolution"]
-    Dm = np.tile(np.array(([30, 0], [0, 30])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
-    Dm_up = np.tile(np.array([[100, 100], [100, 100]]), (sites_low.shape[0], 1, 1))
+    Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
+    Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
     cp = sites.copy()
     cp_low = sites_low
     cp_up = sites_up

@@ -226,7 +226,7 @@ sites=generate_points(Lx,Ly,sx,sy)
 sites_num=sx*sy
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))*resolution
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))*resolution
-Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
+Dm_low = np.tile(np.array([[0.5, 0], [0, 0.5]]), (sites_low.shape[0], 1, 1))
 Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
 cp_low = sites_low
 cp_up = sites_up
@@ -251,7 +251,7 @@ p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHa
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
-resolution=0.02
+resolution=0.01
 scale_y = 4
 scale_x = 4
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
@@ -316,7 +316,7 @@ def objectiveHandle2(p):
     J, dJ = jax.value_and_grad(J_total2)(p)
     output_sol2(p, J)
     return J, dJ
-vf=0.25
+vf=0.35
 def consHandle2(p):
 
     # MMA solver requires (c, dc) as inputs
