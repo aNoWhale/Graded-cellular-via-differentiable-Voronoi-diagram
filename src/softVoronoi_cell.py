@@ -223,7 +223,7 @@ def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
         # 使用 lax.map 和 pmap 结合进行多设备批处理
         def process_batch(i):
             # batch_cells = cell[i:i + effective_batch_size]
-            batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i,2],slice_sizes=[batch_size,2])
+            batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i,2],slice_sizes=[effective_batch_size,2])
             sub_batches = np.array_split(batch_cells, num_devices)
             sub_batches = [jax.device_put(batch) for batch in sub_batches]
             return calc_rho_pmap(np.array(sub_batches), sites, tuple(kwargs.values()))
@@ -273,9 +273,11 @@ def generate_para_rho(para, rho_p, **kwargs):
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
 
     para["sites_num"]=sites.shape[0]
-    move_around=50 # seed movement
-    sites_low = sites.ravel()-move_around*para["resolution"]
-    sites_up = sites.ravel()+move_around*para["resolution"]
+    # move_around=50 # seed movement
+    # sites_low = sites.ravel()-move_around*para["resolution"]
+    # sites_up = sites.ravel()+move_around*para["resolution"]
+    sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
+    sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
     Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
     Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))

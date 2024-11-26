@@ -235,7 +235,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 10, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"resolution":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
