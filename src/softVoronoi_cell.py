@@ -6,13 +6,24 @@ import numpy as onp
 import jax.numpy as np
 from matplotlib import pyplot as plt
 import tqdm
+from numpy.lib.utils import source
 
+import ultilies as ut
 
+@jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
     gamma = 2 ** (epoch // 20)
     field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
                 np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
     return field
+
+@jax.jit
+def rho_boundary_mask(field,rho_mask,epoch):
+    target_min=0.5/(epoch/2+1)
+    mapper=ut.map_func(0,1.1,target_min,1)
+    field=field*(mapper(rho_mask))
+    return field
+
 
 
 def batch_softmax(matrices,**kwargs):  # 形状 (1, 100, 100)
@@ -82,9 +93,6 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     scale = 1 # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
-
-
-
     cos_mask=1
     return (cos**cos_mask)*dist_matrix
 
@@ -206,6 +214,8 @@ def generate_voronoi_separate(para, p, **kwargs):
         field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
     else:
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
+
+    field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
 
     if "heaviside" in para and para["heaviside"] is True:
         field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])

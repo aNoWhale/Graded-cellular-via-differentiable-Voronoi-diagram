@@ -343,7 +343,7 @@ p_oped, j = optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, con
 """"""""""""""""""""""""""""""""""""""""""""""""""
 
 sites = p_oped[0:sites_num * dim].reshape((sites_num, dim))
-# Dm = rho_oped[sites_num * dim:].reshape((sites_num, dim, dim))
+# Dm = rho[sites_num * dim:].reshape((sites_num, dim, dim))
 optimizationParams2 = {'maxIters': 249, 'movelimit': 0.5, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates, "sites_num": sites_num,
                        "dim": dim,
@@ -355,7 +355,7 @@ problem2.op = optimizationParams2
 problem2.setTarget(j * 1.5)
 # cauchy_points=sites.copy()
 p_ini2 = np.ravel(cp)  # 1-d array contains flattened: sites,Dm,cauchy points
-# p_ini2= np.concatenate((rho_oped,np.ravel(cauchy_points)), axis=0)
+# p_ini2= np.concatenate((rho,np.ravel(cauchy_points)), axis=0)
 p_final,j_now =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)
 

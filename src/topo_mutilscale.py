@@ -9,8 +9,8 @@ import os
 import sys
 import glob
 import matplotlib
-from scipy.ndimage import zoom
-
+from scipy import ndimage
+from scipy.ndimage import zoom, sobel
 
 
 matplotlib.use('Qt5Agg') #for WSL
@@ -34,6 +34,9 @@ from jax_fem.mma_original import optimize_rho
 # override base class methods. In particular, set_params sets the design variable theta.
 import softVoronoi
 from softVoronoi_cell import generate_voronoi_separate,generate_para_rho
+import ultilies as ut
+
+
 plt.ion()
 fig, ax = plt.subplots()
 
@@ -247,13 +250,13 @@ p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
 p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
 # rho_ini = vf*np.ones((len(problem.fe.flex_inds), 1))
-# rho_oped,j=optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints )
+# rho,j=optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints )
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
-resolution=1
-scale_y = 1
-scale_x = 1
+resolution=0.1
+scale_y = 2
+scale_x = 2
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
 Lx2,Ly2=Nx2*resolution,Ny2*resolution
 coordinates = np.indices((Nx2, Ny2))*resolution
@@ -261,6 +264,15 @@ coordinates = np.indices((Nx2, Ny2))*resolution
 rho_oped=rho_oped.reshape(Nx,Ny)
 rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
 rho_oped=rho_oped.ravel()
+"""""""""""""""""""""""""""""""""infill reconstruct"""""""""""""""""""""""""""""""""
+rho_oped=rho_oped.reshape((Nx2, Ny2))
+# #硬边界
+# structure = ndimage.generate_binary_structure(2, 2)  # 定义结构元素
+# binary_matrix = (rho_mask > 0.5).astype(np.uint8)
+# boundary = binary_matrix ^ ndimage.binary_erosion(binary_matrix, structure=structure)
+# 软边界
+rho_mask=ut.blur_edges(rho_oped,blur_sigma=1.)
+boundary=ut.extract_continuous_boundary(rho_oped,threshold=0.5)
 
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
@@ -338,7 +350,7 @@ sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["si
 Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 
 optimizationParams2 = {'maxIters': 100, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
-                       "coordinates": coordinates,"resolution":resolution,
+                       "coordinates": coordinates,"resolution":resolution,"rho_mask":rho_mask,"boundary":boundary,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
@@ -347,23 +359,23 @@ optimizationParams2 = {'maxIters': 100, 'movelimit': 0.2, "lastIters":optimizati
                        "sites":sites,"Dm":Dm,
                        "immortal": ["sites","Dm"]}
 """revise para"""
-# p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
-optimizationParams2["sites_num"]=sites.shape[0]
-p_ini2=cp.ravel()
-sites_low = np.tile(np.array([0 - optimizationParams2["margin"], 0 - optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
-sites_up = np.tile(np.array([optimizationParams2["Nx"] + optimizationParams2["margin"], optimizationParams2["Ny"] + optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
-Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
-Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
-cp = sites.copy()
-cp_low = cp.ravel()-30
-cp_up = cp.ravel()+30
-optimizationParams2["bound_low"] = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
-optimizationParams2["bound_up"] = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
-optimizationParams2["paras_at"] = (optimizationParams2["sites_num"] * 6, optimizationParams2["sites_num"] * 8)
-
-problem2.op = optimizationParams2
-problem2.setTarget(j*5)
+# p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho)
+# optimizationParams2["sites_num"]=sites.shape[0]
+# p_ini2=cp.ravel()
+# sites_low = np.tile(np.array([0 - optimizationParams2["margin"], 0 - optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
+# sites_up = np.tile(np.array([optimizationParams2["Nx"] + optimizationParams2["margin"], optimizationParams2["Ny"] + optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
+# Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+# Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
+# Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
+# cp = sites.copy()
+# cp_low = cp.ravel()-30
+# cp_up = cp.ravel()+30
+# optimizationParams2["bound_low"] = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
+# optimizationParams2["bound_up"] = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
+# optimizationParams2["paras_at"] = (optimizationParams2["sites_num"] * 6, optimizationParams2["sites_num"] * 8)
+#
+# problem2.op = optimizationParams2
+# problem2.setTarget(j*5)
 # cauchy_points=sites.copy()
 
 p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,

@@ -158,7 +158,7 @@ if __name__ == '__main__':
     field=heaviside_projection(field, eta=0.5, epoch=120)
 
     print(f"algorithm use ：{time.time() - start_time:.6f} 秒")
-
+    print(f"max.field:{np.max(field)}")
     plt.imshow(field, cmap='viridis')  # 使用 'viridis' 颜色映射
     plt.colorbar(label='Pixel Value')  # 添加颜色条用于显示值的范围
     plt.title("Pixel Values Visualized with Colors")
