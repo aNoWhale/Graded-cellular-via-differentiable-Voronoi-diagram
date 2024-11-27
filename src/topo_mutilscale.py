@@ -235,7 +235,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 99, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"resolution":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -251,9 +251,9 @@ p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHa
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
-resolution=0.01
-scale_y = 4
-scale_x = 4
+resolution=1
+scale_y = 1
+scale_x = 1
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
 Lx2,Ly2=Nx2*resolution,Ny2*resolution
 coordinates = np.indices((Nx2, Ny2))*resolution
@@ -316,7 +316,7 @@ def objectiveHandle2(p):
     J, dJ = jax.value_and_grad(J_total2)(p)
     output_sol2(p, J)
     return J, dJ
-vf=0.35
+vf=0.3
 def consHandle2(p):
 
     # MMA solver requires (c, dc) as inputs
@@ -333,19 +333,37 @@ def consHandle2(p):
 problem2 = Elasticity(mesh2, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info2,
                       location_fns=location_fns2)
 fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
-optimizationParams2 = {'maxIters': 100, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1,
+
+sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
+Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
+
+optimizationParams2 = {'maxIters': 100, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates,"resolution":resolution,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
                        "heaviside": True, "control": True,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
-                        "immortal": []}
+                       "sites":sites,"Dm":Dm,
+                       "immortal": ["sites","Dm"]}
 """revise para"""
-p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
+# p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
+optimizationParams2["sites_num"]=sites.shape[0]
+p_ini2=cp.ravel()
+sites_low = np.tile(np.array([0 - optimizationParams2["margin"], 0 - optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
+sites_up = np.tile(np.array([optimizationParams2["Nx"] + optimizationParams2["margin"], optimizationParams2["Ny"] + optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
+Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
+Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
+cp = sites.copy()
+cp_low = cp.ravel()-30
+cp_up = cp.ravel()+30
+optimizationParams2["bound_low"] = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
+optimizationParams2["bound_up"] = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
+optimizationParams2["paras_at"] = (optimizationParams2["sites_num"] * 6, optimizationParams2["sites_num"] * 8)
 
 problem2.op = optimizationParams2
-problem2.setTarget(j*1.5)
+problem2.setTarget(j*5)
 # cauchy_points=sites.copy()
 
 p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
