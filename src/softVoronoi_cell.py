@@ -167,28 +167,37 @@ def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     devices = jax.devices()
     num_devices = len(devices)
     batch_size = kwargs.get('batch_size', 100)
+    rho_list=[]
     if num_devices == 1:
         calc_rho_batch = calc_rho
-        def process_batch(i):
-            # batch_cells = cell[i:i + batch_size]
-            batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i,2],slice_sizes=[batch_size,2])
-            return calc_rho_batch(batch_cells, sites, tuple(kwargs.values()))
-        # 使用 lax.map 代替 for 循环
-        rho_list = jax.lax.map(process_batch, np.arange(0, cell.shape[0], batch_size))
+        # def process_batch(i):
+        #     # batch_cells = cell[i:i + batch_size]
+        #     batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i,2],slice_sizes=[batch_size,2])
+        #     return calc_rho_batch(batch_cells, sites, tuple(kwargs.values()))
+        # # 使用 lax.map 代替 for 循环
+        # rho_list = jax.lax.map(process_batch, np.arange(0, cell.shape[0], batch_size))
+        for i in range(0, cell.shape[0], batch_size):
+            batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i, 2], slice_sizes=[batch_size, 2])
+            rho_list.append(calc_rho_batch(batch_cells, sites, tuple(kwargs.values())))
     else:
         # 使用 pmap 实现多设备并行计算
         calc_rho_pmap = jax.pmap(calc_rho, in_axes=(0, None, None))
         # 确定有效的批次大小（每个设备的大小）
         effective_batch_size = batch_size * num_devices
         # 使用 lax.map 和 pmap 结合进行多设备批处理
-        def process_batch(i):
-            # batch_cells = cell[i:i + effective_batch_size]
-            batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i,2],slice_sizes=[effective_batch_size,2])
+        # def process_batch(i):
+        #     # batch_cells = cell[i:i + effective_batch_size]
+        #     batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i,2],slice_sizes=[effective_batch_size,2])
+        #     sub_batches = np.array_split(batch_cells, num_devices)
+        #     sub_batches = np.stack(sub_batches)
+        #     return calc_rho_pmap(sub_batches, sites, tuple(kwargs.values()))
+        # # 使用 lax.map 批量处理每个批次
+        # rho_list = jax.lax.map(process_batch, np.arange(0, cell.shape[0], effective_batch_size))
+        for i in range(0,cell.shape[0],effective_batch_size):
+            batch_cells = jax.lax.dynamic_slice(cell, start_indices=[i, 2], slice_sizes=[effective_batch_size, 2])
             sub_batches = np.array_split(batch_cells, num_devices)
             sub_batches = np.stack(sub_batches)
-            return calc_rho_pmap(sub_batches, sites, tuple(kwargs.values()))
-        # 使用 lax.map 批量处理每个批次
-        rho_list = jax.lax.map(process_batch, np.arange(0, cell.shape[0], effective_batch_size))
+            rho_list.append(calc_rho_pmap(sub_batches, sites, tuple(kwargs.values())))
     # 合并所有批次结果
     return np.concatenate(rho_list, axis=0).reshape(field.shape[:-1])
 
@@ -206,16 +215,22 @@ def generate_voronoi_separate(para, p, **kwargs):
     sites = para["sites"] if "sites" in para else p[0:sites_len].reshape(shapes[0][0], shapes[0][1])
     Dm = para["Dm"] if "Dm" in para else p[sites_len:sites_len + Dm_len].reshape(shapes[1][0], shapes[1][1],
                                                                                     shapes[1][2])
+    if "sites_boundary" in para and "Dm_boundary" in para:
+        sites=np.concatenate((sites,para["sites_boundary"]),axis=0)
+        Dm=np.concatenate((Dm,para["Dm_boundary"]),axis=0)
+
 
     coordinates = np.stack(coordinates, axis=-1)
     if "cp" in para or para["control"]:
         cp = para["cp"] if "cp" in para else (
             p[sites_len + Dm_len:sites_len + Dm_len + c_len].reshape(shapes[2][0], shapes[2][1]))
+        if "sites_boundary" in para and "Dm_boundary" in para:
+            cp=np.concatenate((cp,para["sites_boundary"]),axis=0)
         field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
     else:
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
 
-    field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
+    # field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
 
     if "heaviside" in para and para["heaviside"] is True:
         field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
@@ -230,7 +245,7 @@ def generate_para_rho(para, rho_p, **kwargs):
     key = jax.random.PRNGKey(1)
     random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
     # rho*float + x determines the point generation rate.
-    void=0.1
+    void=0.
     entity=2.
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
     para["sites_num"]=sites.shape[0]
