@@ -19,9 +19,7 @@ def heaviside_projection(field, eta=0.5, epoch=0):
 
 @jax.jit
 def rho_boundary_mask(field,rho_mask,epoch):
-    target_min=0.5/(epoch/2+1)
-    mapper=ut.map_func(0,1.1,target_min,1)
-    field=field*(mapper(rho_mask))
+    field=field*rho_mask
     return field
 
 
@@ -216,7 +214,7 @@ def generate_voronoi_separate(para, p, **kwargs):
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
 
     field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
-
+    # field=field*para["boundary"]
     if "heaviside" in para and para["heaviside"] is True:
         field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
 
@@ -234,11 +232,11 @@ def generate_para_rho(para, rho_p, **kwargs):
     entity=2.
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
     para["sites_num"]=sites.shape[0]
-    move_around=50 # seed movement
-    sites_low = sites.ravel()-move_around*para["resolution"]
-    sites_up = sites.ravel()+move_around*para["resolution"]
-    # sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
-    # sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
+    # move_around=50 # seed movement
+    # sites_low = sites.ravel()-move_around*para["resolution"]
+    # sites_up = sites.ravel()+move_around*para["resolution"]
+    sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
+    sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
     Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
     Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
