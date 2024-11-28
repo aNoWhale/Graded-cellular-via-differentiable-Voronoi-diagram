@@ -204,11 +204,16 @@ def generate_voronoi_separate(para, p, **kwargs):
     sites = para["sites"] if "sites" in para else p[0:sites_len].reshape(shapes[0][0], shapes[0][1])
     Dm = para["Dm"] if "Dm" in para else p[sites_len:sites_len + Dm_len].reshape(shapes[1][0], shapes[1][1],
                                                                                     shapes[1][2])
+    if "sites_boundary" in para and "Dm_boundary" in para:
+        sites=np.concatenate((sites,para["sites_boundary"]), axis=0)
+        Dm=np.concatenate((Dm,para["Dm_boundary"]), axis=0)
 
     coordinates = np.stack(coordinates, axis=-1)
     if "cp" in para or para["control"]:
         cp = para["cp"] if "cp" in para else (
             p[sites_len + Dm_len:sites_len + Dm_len + c_len].reshape(shapes[2][0], shapes[2][1]))
+        if "sites_boundary" in para and "Dm_boundary" in para:
+            cp=np.concatenate((cp,para["sites_boundary"]), axis=0)
         field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
     else:
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)

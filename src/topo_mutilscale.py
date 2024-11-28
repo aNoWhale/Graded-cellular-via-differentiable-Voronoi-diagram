@@ -268,14 +268,15 @@ rho_oped=rho_oped.ravel()
 rho=rho_oped.reshape((Nx2, Ny2))
 last_vf=np.mean(rho_oped)
 #硬边界
-rho_mask = rho
-structure = ndimage.generate_binary_structure(2, 2)  # 定义结构元素
-binary_matrix = (rho_mask > 0.5)
-boundary = binary_matrix ^ ndimage.binary_erosion(binary_matrix, structure=structure)
+# rho_mask = rho
+# structure = ndimage.generate_binary_structure(2, 2)  # 定义结构元素
+# binary_matrix = (rho_mask > 0.5)
+# boundary = binary_matrix ^ ndimage.binary_erosion(binary_matrix, structure=structure)
 # # 软边界
 # rho_mask=ut.blur_edges(rho,blur_sigma=1.)
 # boundary=ut.extract_continuous_boundary(rho,threshold=0.5)
-
+sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
+Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
 meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
@@ -352,7 +353,8 @@ sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["si
 Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 
 optimizationParams2 = {'maxIters': 100, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
-                       "coordinates": coordinates,"resolution":resolution,"rho_mask":rho_mask,"boundary":boundary,
+                       "coordinates": coordinates,"resolution":resolution,
+                       "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
