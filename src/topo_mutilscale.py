@@ -238,7 +238,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"resolution":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -254,9 +254,9 @@ p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHa
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
-resolution=0.1
-scale_y = 2
-scale_x = 2
+resolution=0.01
+scale_y = 3
+scale_x = 3
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
 Lx2,Ly2=Nx2*resolution,Ny2*resolution
 coordinates = np.indices((Nx2, Ny2))*resolution
@@ -264,10 +264,17 @@ coordinates = np.indices((Nx2, Ny2))*resolution
 rho_oped=rho_oped.reshape(Nx,Ny)
 rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
 rho_oped=rho_oped.ravel()
-"""""""""""""""""""""""""""""""""infill pre-process"""""""""""""""""""""""""""""""""
-sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
-Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))
-
+"""""""""""""""""""""""""""""""""infill reconstruct"""""""""""""""""""""""""""""""""
+rho=rho_oped.reshape((Nx2, Ny2))
+last_vf=np.mean(rho_oped)
+#硬边界
+rho_mask = rho
+structure = ndimage.generate_binary_structure(2, 2)  # 定义结构元素
+binary_matrix = (rho_mask > 0.5)
+boundary = binary_matrix ^ ndimage.binary_erosion(binary_matrix, structure=structure)
+# # 软边界
+# rho_mask=ut.blur_edges(rho,blur_sigma=1.)
+# boundary=ut.extract_continuous_boundary(rho,threshold=0.5)
 
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
@@ -323,7 +330,7 @@ def objectiveHandle2(p):
     J, dJ = jax.value_and_grad(J_total2)(p)
     output_sol2(p, J)
     return J, dJ
-vf=0.3
+vf=last_vf*0.5
 def consHandle2(p):
 
     # MMA solver requires (c, dc) as inputs
@@ -345,12 +352,12 @@ sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["si
 Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 
 optimizationParams2 = {'maxIters': 100, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
-                       "coordinates": coordinates,"resolution":resolution,"last_sites_num":optimizationParams["sites_num"],
+                       "coordinates": coordinates,"resolution":resolution,"rho_mask":rho_mask,"boundary":boundary,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
                        "heaviside": True, "control": True,
-                       "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
+                       # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                        "immortal": []}
 """revise para"""
 p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
