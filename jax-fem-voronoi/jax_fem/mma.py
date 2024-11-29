@@ -467,6 +467,9 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             sites=p[0:optiPara["sites_num"]*optiPara["dim"]].reshape(optiPara["sites_num"],optiPara["dim"])
             plt.clf()
             plt.imshow(rho,cmap='viridis')
+            if "sites_boundary" in optiPara:
+                osites = np.array(optiPara["sites_boundary"])
+                plt.scatter(osites[:, 1]/optiPara["resolution"], osites[:, 0]/optiPara["resolution"], c="w", marker="+")
             plt.title(f"loop:{loop + optiPara['lastIters']}/{optiPara['maxIters'] + optiPara['lastIters']}")
             plt.scatter(sites[:,1]/optiPara["resolution"],sites[:,0]/optiPara["resolution"],color='r',marker='+')
             plt.colorbar()

@@ -203,7 +203,7 @@ def objectiveHandle(p):
     J, dJ = jax.value_and_grad(J_total)(p)
     output_sol(p, J)
     return J, dJ
-vf=0.3
+vf=0.3 #0.3
 def consHandle1(rho):
 
     # MMA solver requires (c, dc) as inputs
@@ -254,12 +254,12 @@ p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHa
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 
 # 计算缩放比例
-resolution=0.01
+resolution2=0.01
 scale_y = 3
 scale_x = 3
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
-Lx2,Ly2=Nx2*resolution,Ny2*resolution
-coordinates = np.indices((Nx2, Ny2))*resolution
+Lx2,Ly2=Nx2*resolution2,Ny2*resolution2
+coordinates = np.indices((Nx2, Ny2))*resolution2
 # 使用 zoom 进行缩放
 rho_oped=rho_oped.reshape(Nx,Ny)
 rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
@@ -276,7 +276,9 @@ last_vf=np.mean(rho_oped)
 # rho_mask=ut.blur_edges(rho,blur_sigma=1.)
 # boundary=ut.extract_continuous_boundary(rho,threshold=0.5)
 sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
-Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))
+sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0]*scale_x*resolution2/resolution)
+sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]*scale_y*resolution2/resolution)
+Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*50
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
 meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
@@ -331,7 +333,7 @@ def objectiveHandle2(p):
     J, dJ = jax.value_and_grad(J_total2)(p)
     output_sol2(p, J)
     return J, dJ
-vf=last_vf*0.5
+vf=last_vf
 def consHandle2(p):
 
     # MMA solver requires (c, dc) as inputs
@@ -349,11 +351,11 @@ problem2 = Elasticity(mesh2, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=
                       location_fns=location_fns2)
 fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
 
-sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
-Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
-
-optimizationParams2 = {'maxIters': 100, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
-                       "coordinates": coordinates,"resolution":resolution,
+# sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
+# Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
+print(f"Dm_boundary:{Dm_boundary}")
+optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
+                       "coordinates": coordinates,"resolution":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        # "sites_num": sites_num,
                        "dim": dim,
@@ -391,7 +393,7 @@ print(f"previous J/compliance :{j}\n now error:{j_now}")
 print(f"running time:{time.time() - time_start}")
 # Plot the optimization results.
 obj = onp.array(outputs)
-fig=plt.figure(figsize=(16, 8))
+fig=plt.figure(figsize=(16, 10))
 ax1=fig.add_subplot(1, 1, 1)
 ax1.plot(onp.arange(len(obj)) + 1, obj, linestyle='-', linewidth=2, color='black')
 plt.draw()

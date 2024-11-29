@@ -1,8 +1,9 @@
 import vtk
 
 # 读取VTU文件
+filename="sol_089"
 reader = vtk.vtkXMLUnstructuredGridReader()
-reader.SetFileName("data/vtk_test/sol_098.vtu")
+reader.SetFileName(f"data/vtk/{filename}.vtu")
 reader.Update()
 
 # 创建阈值过滤器以提取theta层
@@ -11,7 +12,7 @@ threshold_filter.SetInputData(reader.GetOutput())
 threshold_filter.SetInputArrayToProcess(0, 0, 0, 1, "theta")
 
 # 设置阈值范围
-lower_threshold = 0.5  # 设置你的层值下限
+lower_threshold = 0.8  # 设置你的层值下限
 upper_threshold = 1.0   # 设置你的层值上限
 threshold_filter.SetLowerThreshold(lower_threshold)
 threshold_filter.SetUpperThreshold(upper_threshold)
@@ -24,7 +25,7 @@ geometry_filter.Update()
 
 # 创建体素
 z_layer = 0.0  # 指定切片的高度
-thickness = 10  # 指定体素的厚度
+thickness = 0.5  # 指定体素的厚度
 
 # 创建点和面
 points = vtk.vtkPoints()
@@ -86,6 +87,6 @@ poly_data_with_thickness.SetPolys(faces)
 
 # 写入新的STL文件
 stl_writer = vtk.vtkSTLWriter()
-stl_writer.SetFileName("sol_098.stl")
+stl_writer.SetFileName(f"{filename}.stl")
 stl_writer.SetInputData(poly_data_with_thickness)
 stl_writer.Write()

@@ -125,34 +125,34 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     scale = 1  # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
-    cos_mask = sigmoid(3*(dist_sc-dist_sx))
+    cos_mask = sigmoid(0.1*(dist_sc-dist_sx))
     return (cos ** cos_mask) * dist_m_cell
 
 
 def rho_cell_mm(cell, sites, *args):
     dist_f = d_mahalanobis_masked_cell(cell,sites,*args[0])  # N
-    # etas = np.array([1e-30])
-    # dist_f = np.concatenate((dist_f, etas), axis=0)
+    etas = np.array([0])
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
-    sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
+    # exp_matrices = np.exp(negative_dist)  # N
+    sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)
     soft = exp_matrices / sum_vals  # N
-    beta = 6 # 10 #5 razer 7 6
+    beta = 7 # 10 #5 razer 7 6
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
 
 def rho_cell_m(cell, sites, *args):
     dist_f = d_mahalanobis_cell(cell,sites,*args[0])  # N
-    # etas = np.array([1e-30])
-    # dist_f = np.concatenate((dist_f, etas), axis=0)
+    etas = np.array([0])
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
+    # exp_matrices = np.exp(negative_dist)  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 6  # 10 #5 razer 7
+    beta = 7  # 10 #5 razer 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -218,7 +218,7 @@ def generate_voronoi_separate(para, p, **kwargs):
     else:
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
 
-    field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
+    # field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
     # field=field*para["boundary"]
     if "heaviside" in para and para["heaviside"] is True:
         field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
@@ -233,18 +233,18 @@ def generate_para_rho(para, rho_p, **kwargs):
     key = jax.random.PRNGKey(1)
     random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
     # rho*float + x determines the point generation rate.
-    void=0.1
+    void=0.
     entity=2.
     sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
     para["sites_num"]=sites.shape[0]
-    # move_around=50 # seed movement
-    # sites_low = sites.ravel()-move_around*para["resolution"]
-    # sites_up = sites.ravel()+move_around*para["resolution"]
-    sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
-    sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
+    move_around=50 # seed movement
+    sites_low = sites.ravel()-move_around*para["resolution"]
+    sites_up = sites.ravel()+move_around*para["resolution"]
+    # sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
+    # sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
     Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
-    Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
+    Dm_low = np.tile(np.array([[0, 0], [0, 0]]), (sites_low.shape[0], 1, 1))
+    Dm_up = np.tile(np.array([[150, 150], [150, 150]]), (sites_low.shape[0], 1, 1))
     cp = sites.copy()
     cp_low = sites_low
     cp_up = sites_up
