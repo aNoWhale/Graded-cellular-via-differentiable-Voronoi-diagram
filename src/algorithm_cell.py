@@ -5,6 +5,9 @@ import jax
 import numpy as np
 # import jax.numpy as np
 from matplotlib import pyplot as plt
+import tqdm
+
+from src import ultilies
 
 
 def heaviside_projection(field, eta=0.5, epoch=0):
@@ -39,18 +42,23 @@ def d_mahalanobis_cell(cell, sites, Dm, *args):
 def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     alot = 1e-9  # avoid nan
     # Dm = Dm[0]
+    Dm_inv=args[0]
     diff_sx = cell[None, None, :] - sites[:, None, :]  # N*1*dim
     dist_m_cell = np.sqrt((diff_sx @ Dm.swapaxes(1, 2) @ Dm @ diff_sx.swapaxes(1, 2))).squeeze()
+    # dist_m_sx_inv = np.sqrt((diff_sx @ Dm_inv.swapaxes(1, 2) @ Dm_inv @ diff_sx.swapaxes(1, 2))).squeeze()
     diff_sc = cp[:, None, :] - sites[:, None, :]  # N*1*dim
     dist_sc = np.linalg.norm(diff_sc, axis=-1).squeeze() + alot  # N
+    # dist_m_sc_inv = np.sqrt((diff_sc @ Dm_inv.swapaxes(1, 2) @ Dm_inv @ diff_sc.swapaxes(1, 2))).squeeze() + alot  # N
     dist_sx = np.linalg.norm(diff_sx, axis=-1).squeeze() + alot  # N
     cos = np.abs((diff_sc @ diff_sx.swapaxes(-1, -2)).squeeze() / (dist_sx * dist_sc)).squeeze()  # N
     sigma = 1. / 30  # 1/100   1/3   1/30
     mu = 1
-    scale = 1  # 1
-    k = (1 / normal_distribution(mu, mu, sigma)) * scale
+    kr=1
+    # mushroom = kr * np.power(dist_sx,0.5) + 1
+    mushroom = 1
+    k = (1 / normal_distribution(mu, mu, sigma)) * mushroom
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
-    cos_mask = sigmoid(10*(dist_sc-dist_sx))
+    cos_mask = sigmoid(0.1*(dist_sc-dist_sx))
     return (cos ** cos_mask) * dist_m_cell
 
 
@@ -87,7 +95,7 @@ def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     cell = field.reshape(-1, 2)  # cell_num * 2
     calc_rho=lambda cell,sites: rho_fn(cell, sites, *kwargs.values())
     rh=[]
-    for i in range(0,cell.shape[0]):
+    for i in tqdm.tqdm(range(0,cell.shape[0])):
         rh.append(calc_rho(cell[i,:], sites))
     # rh = jax.vmap(calc_rho, in_axes=(0, None))(cell, sites)
     return np.array(rh)
@@ -109,13 +117,13 @@ def generate_voronoi_separate(para, p, **kwargs):
     sites = para["sites"] if "sites" in para else p[0:sites_len].reshape(shapes[0][0], shapes[0][1])
     Dm = para["Dm"] if "Dm" in para else p[sites_len:sites_len + Dm_len].reshape(shapes[1][0], shapes[1][1],
                                                                                     shapes[1][2])
-
+    Dm_inv = ultilies.inv_2d(Dm)
 
     coordinates = np.stack(coordinates, axis=-1)
     if "cp" in para or para["control"]:
         cp = para["cp"] if "cp" in para else (
             p[sites_len + Dm_len:sites_len + Dm_len + c_len].reshape(shapes[2][0], shapes[2][1]))
-        field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
+        field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp,Dm_inv=Dm_inv)
     else:
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
 
@@ -140,7 +148,7 @@ if __name__ == '__main__':
     cauchy_field = coordinates.copy()
     # coordination
     sites=np.array(([100,100],[300,100]))*resolution
-    cp=np.array(([300,100],[300,100]))*resolution
+    cp=np.array(([350,100],[300,100]))*resolution
 
     # sites_x = np.random.randint(low=0, high=Nx, size=(36, 1))*resolution
     # sites_y = np.random.randint(low=0, high=Ny, size=(36, 1))*resolution
@@ -148,13 +156,14 @@ if __name__ == '__main__':
     # cp = sites.copy()
     # cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
 
-    Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    # Dm[0] = np.array(([100, 0], [0, 100]))
+    Dm = np.tile(np.array(([100.0, 0.], [0., 100.])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    Dm_inv = ultilies.inv_2d(Dm)
+    Dm[0] = np.array(([100, 0], [0, 200]))
 
     # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
     # field=voronoi_field(coordinates, sites, Dm=Dm)
     # field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
-    field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm,cp=cp).reshape(Nx,Ny)
+    field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm,cp=cp,Dm_inv = Dm_inv).reshape(Nx,Ny)
     field=heaviside_projection(field, eta=0.5, epoch=120)
 
     print(f"algorithm use ：{time.time() - start_time:.6f} 秒")

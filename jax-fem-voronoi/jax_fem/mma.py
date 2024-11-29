@@ -21,6 +21,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 config.update("jax_enable_x64", True)
 
+from src.numpy2stl import generate_stl_from_matrix
+
 
 def compute_filter_kd_tree(fe):
     """This function is created by Tianju. Not from the original code.
@@ -463,6 +465,7 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             pbar.update(1)
             print(f"MMA solver...")
             rho = generate_rho(optiPara, p, epoch=loop)
+            generate_stl_from_matrix(rho,threshold=0.5,cube_size=1,filename=f'{loop + optiPara["lastIters"]}')
             ####render windows and save fig
             sites=p[0:optiPara["sites_num"]*optiPara["dim"]].reshape(optiPara["sites_num"],optiPara["dim"])
             plt.clf()

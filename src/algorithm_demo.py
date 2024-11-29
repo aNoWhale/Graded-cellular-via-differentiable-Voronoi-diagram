@@ -70,26 +70,38 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     dist_matrix = np.sqrt(nor)+alot  # Nc*n*n
 
     diff_xmxs = xm[:,None,:] - xs[:,None,:] #N*1*dim
-    # dot1 = np.einsum('ijk,ikl->ijl', diff_xmxs, Dm.swapaxes(1, 2))
-    # dot2 = np.einsum('ijk,ikl->ijl', Dm, diff_xmxs.swapaxes(-1, -2))
-    # nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
-    # dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
+
+    Dm_inv = np.array([np.linalg.inv(Dm[i]) for i in range(Dm.shape[0])])
+    dot1 = np.einsum('ijk,ikl->ijl', diff_xmxs, Dm_inv.swapaxes(1, 2))
+    dot2 = np.einsum('ijk,ikl->ijl', Dm_inv, diff_xmxs.swapaxes(-1, -2))
+    nor = np.einsum("ijk,ikl->ijl", dot1, dot2)
+    dist_xmxs = (np.sqrt(nor)+alot)  # Nc*1*1
+
+    dot1 = np.einsum('ijklm,imn->ijkln', diff_xxm, Dm_inv.swapaxes(1, 2))
+    dot2 = np.einsum('imn,ijknl->ijkml', Dm_inv, diff_xxm.swapaxes(-1, -2))
+    nor = np.einsum("ijklm,ijkml->ijk", dot1, dot2)
+    dist_xxm = np.sqrt(nor)+alot  # Nc*n*n
+
     dist_exmxs=np.linalg.norm(diff_xmxs, axis=-1)[:,None,None,:]+alot
     dist_exxm=np.linalg.norm(diff_xxm, axis=-1)+alot
     # cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_xmxs*dist_matrix)) #Nc*n*n
     cos= np.abs(np.einsum("ijk,ilmkn->ilmjn", diff_xmxs, diff_xxm.swapaxes(-1,-2)).squeeze()/(dist_exmxs*dist_exxm).squeeze()) #Nc*n*n
 
     ##### 奥特曼形
-    # sigma = 1. / 30
+    # sigma = 1. / 10
     # mu = 1
-    # scale = 3
-    # k = (1 / normal_distribution(mu, mu, sigma)) * scale
-    # cos = normal_distribution(cos, mu=mu, sigma=sigma) * k * (-1) + scale + 1
+    # kr=1
+    # mushroom = kr * np.power(dist_exxm, 2) + 1
+    # mushroom = 1
+    # k = ((1 / normal_distribution(mu, mu, sigma)) * mushroom).squeeze()
+    # cos = normal_distribution(cos, mu=mu, sigma=sigma) * k * (-1) + 1
     ##### 桃子
     sigma = 1. / 10
     mu = 1
-    scale = 1
-    k = (1 / normal_distribution(mu, mu, sigma)) * scale
+    kr=0.001
+    mushroom = kr * np.power(dist_xxm, -2) + 1
+    # mushroom = 1
+    k = ((1 / normal_distribution(mu, mu, sigma)) * 1).squeeze()
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
     #### 正态range
     # sigma_mask = 20.
@@ -99,9 +111,8 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     # cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
     #### sigmoid range
     # x0=20 #用于valley消失于多远
-    # smooth=0.1
     cos_mask=1
-    # cos_mask=sigmoid(-1*smooth*(dist_matrix-x0))
+    cos_mask=sigmoid(0.1 * (dist_exmxs-dist_exxm)).squeeze()
     return (cos**cos_mask)*dist_matrix
 
 
@@ -235,14 +246,15 @@ def generate_gene_random(op, Nx, Ny) -> np.ndarray:
 
 if __name__ == '__main__':
     start_time = time.time()  # 计时起点
-    x_len = 100
-    y_len = 100
+    x_len = 400
+    y_len = 200
+    resolution=0.01
     coords = np.indices((x_len, y_len))
-    coordinates = np.stack(coords, axis=-1)
+    coordinates = np.stack(coords, axis=-1)*resolution
     cauchy_field = coordinates.copy()
 
-    sites=np.array(([30,50],[80,50],))
-    cauchy_points=np.array(([70,30],[90,50]))
+    sites=np.array(([30,50],[80,50],))*resolution
+    cauchy_points=np.array(([70,30],[90,50]))*resolution
     # np.random.seed(0)
     # sites = np.random.randint(low=0, high=100, size=(40, 2))
     # cauchy_points = sites.copy()
@@ -262,7 +274,7 @@ if __name__ == '__main__':
     dist = d_mahalanobis_masked(coordinates, sites, cauchy_points,Dm)
     # d0=np.full_like(dist[0,:,:],15)
     # dist=np.concatenate((dist,d0[None,:]),axis=0)
-    Dm_inv = np.array([np.linalg.inv(Dm[i]) for i in range(Dm.shape[0])])
+    # Dm_inv = np.array([np.linalg.inv(Dm[i]) for i in range(Dm.shape[0])])
 
 
     # dist = cauchy_mask(dist, cauchy_points, cauchy_field,gamma=5,scale=3,Dm=Dm_inv)

@@ -1,7 +1,9 @@
 from scipy.ndimage import sobel
 from scipy.ndimage import gaussian_filter, binary_dilation, binary_erosion
 import jax.numpy as np
+from jax import config
 
+config.update("jax_enable_x64", True)
 def extract_continuous_boundary(rho, threshold=0.5):
     # 阈值处理：将大于 threshold 的部分看作区域
     mask = (rho > threshold).astype(float)
@@ -41,3 +43,19 @@ def map_func(source_min, source_max, target_min, target_max):
         将 values 从 [source_min, source_max] 映射到 [target_min, target_max].
         """
         return lambda x :target_min + (x - source_min) * (target_max - target_min) / (source_max - source_min)
+
+def inv_2d(matrix):
+    a = matrix[:, 0, 0]
+    b = matrix[:, 0, 1]
+    c = matrix[:, 1, 0]
+    d = matrix[:, 1, 1]
+    determinants = a * d - b * c
+    # determinants=np.linalg.det(matrix)
+    # if np.any(np.isclose(determinants, 0)):
+    #     raise ValueError("unable to compute inverse！")
+    inverses = np.zeros_like(matrix,dtype=np.float64)
+    inverses =inverses.at[:, 0, 0].set(d / determinants)  # d / det
+    inverses =inverses.at[:, 0, 1].set(-b / determinants)  # -b / det
+    inverses =inverses.at[:, 1, 0].set(-c / determinants ) # -c / det
+    inverses =inverses.at[:, 1, 1].set(a / determinants)
+    return inverses
