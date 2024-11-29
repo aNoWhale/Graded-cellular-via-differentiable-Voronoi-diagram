@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from stl import mesh
 
@@ -60,8 +62,12 @@ def generate_stl_from_matrix(matrix, threshold=0.5, cube_size=1,filename="output
     for i, f in enumerate(faces):
         for j in range(3):
             cube_mesh.vectors[i][j] = vertices[f[j]]
-    cube_mesh.save(f'src/data/vtk/{filename}.stl')
-    print(f"STL file saved as '{filename}.stl'")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    target_dir = os.path.join(script_dir, '../../src/data/vtk')
+    os.makedirs(target_dir, exist_ok=True)
+    file_path = os.path.join(target_dir, f'{filename}.stl')
+    cube_mesh.save(file_path)
+    print(f"STL file saved as '{file_path}'")
 
 
 

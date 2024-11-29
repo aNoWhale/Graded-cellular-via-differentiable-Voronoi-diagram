@@ -119,6 +119,7 @@ ele_type = 'QUAD4'
 cell_type = get_meshio_cell_type(ele_type)
 # Output solution files to local disk
 outputs = []
+outputs2 = []
 # Finalize the details of the MMA optimizer, and solve the TO problem.
 dim = 2
 
@@ -278,7 +279,8 @@ last_vf=np.mean(rho_oped)
 sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
 sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0]*scale_x*resolution2/resolution)
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]*scale_y*resolution2/resolution)
-Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*50
+
+Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*55 #50
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
 meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
@@ -319,7 +321,7 @@ def output_sol2(params, obj_val):
              cell_infos=[('theta', problem2.full_params[:, 0])], )
     # point_infos = [("sites", params[0:problem2.op["sites_num"] * 2].reshape(problem2.op["sites_num"], problem2.op["Dm_dim"]))]
     print(f"compliance or var = {obj_val}")
-    outputs.append(obj_val)
+    outputs2.append(obj_val)
     output_sol.counter += 1
 def objectiveHandle2(p):
     """
@@ -393,9 +395,12 @@ print(f"previous J/compliance :{j}\n now error:{j_now}")
 print(f"running time:{time.time() - time_start}")
 # Plot the optimization results.
 obj = onp.array(outputs)
-fig=plt.figure(figsize=(16, 10))
-ax1=fig.add_subplot(1, 1, 1)
+obj2 = onp.array(outputs2)
+fig=plt.figure(figsize=(16, 8))
+ax1=fig.add_subplot(1, 2, 1)
 ax1.plot(onp.arange(len(obj)) + 1, obj, linestyle='-', linewidth=2, color='black')
+ax1=fig.add_subplot(1, 2, 2)
+ax1.plot(onp.arange(len(obj2)) + 1, obj2, linestyle='-', linewidth=2, color='black')
 plt.draw()
 plt.savefig(f'data/vtk/result.png', dpi=600, bbox_inches='tight')
 # plt.show()

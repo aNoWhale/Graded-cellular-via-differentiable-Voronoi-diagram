@@ -15,13 +15,16 @@ from jax import jit, grad, random, jacfwd, value_and_grad
 from functools import partial
 import time
 import scipy
-
+import sys
+import os
 from jax import config
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-config.update("jax_enable_x64", True)
 
-from src.numpy2stl import generate_stl_from_matrix
+config.update("jax_enable_x64", True)
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
+
+import jax_fem.numpy2stl
 
 
 def compute_filter_kd_tree(fe):
@@ -465,7 +468,7 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             pbar.update(1)
             print(f"MMA solver...")
             rho = generate_rho(optiPara, p, epoch=loop)
-            generate_stl_from_matrix(rho,threshold=0.5,cube_size=1,filename=f'{loop + optiPara["lastIters"]}')
+            jax_fem.numpy2stl.generate_stl_from_matrix(rho,threshold=0.5,cube_size=1,filename=f'{loop + optiPara["lastIters"]}')
             ####render windows and save fig
             sites=p[0:optiPara["sites_num"]*optiPara["dim"]].reshape(optiPara["sites_num"],optiPara["dim"])
             plt.clf()
