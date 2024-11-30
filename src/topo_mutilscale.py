@@ -369,8 +369,8 @@ optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizatio
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        # "sites_num": sites_num,
                        "dim": dim,
-                       "Nx": Nx2, "Ny": Ny2, "margin": margin,
-                       "heaviside": True, "control": False,
+                       "Nx": Nx2, "Ny": Ny2, "margin": margin,"Lx":Lx2, "Ly":Ly2,
+                       "heaviside": True, "control": True,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                        "immortal": []}
 """revise para"""

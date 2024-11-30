@@ -230,12 +230,26 @@ def generate_para_rho(para, rho_p, **kwargs):
     # generate seed
     rho=rho_p
     rho=rho.reshape(para["Nx"],para["Ny"])
-    key = jax.random.PRNGKey(2)
-    random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
-    # rho*float + x determines the point generation rate.
-    void=0.
-    entity=1.5 #2.
-    sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
+    ## 随机sites
+    # key = jax.random.PRNGKey(2)
+    # random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
+    # # rho*float + x determines the point generation rate.
+    # void=0.
+    # entity=1.5 #2.
+    # sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
+    ## 整齐的生成sites
+    density_x=15 #pixel
+    density_y=15 #pixel
+    num_zeros_x= para["Nx"] // density_x
+    num_zeros_y= para["Ny"] // density_y
+    matrix = np.ones((para["Nx"], para["Ny"]), dtype=int)
+    step_x = max(1, density_x)  # 行方向步长
+    step_y = max(1, density_y)  # 列方向步长
+    row_indices, col_indices = np.meshgrid(np.arange(0, para["Nx"], step_x), np.arange(0, para["Ny"], step_y), indexing='ij')
+    row_indices = row_indices.ravel()  # 展平
+    col_indices = col_indices.ravel()  # 展平
+    matrix = matrix.at[row_indices, col_indices].set(0)
+    sites = np.argwhere(matrix+0.5 < rho) * para["resolution"]
     para["sites_num"]=sites.shape[0]
     move_around=60 # seed movement 50
     sites_low = sites.ravel()-move_around*para["resolution"]
