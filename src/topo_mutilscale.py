@@ -249,7 +249,15 @@ optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
 problem.op = optimizationParams
 p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
-p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
+if False:
+    p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
+    np.save("data/p_oped.npy", p_oped)
+    np.save("data/j.npy", j)
+    np.save("data/rho_oped.npy", rho_oped)
+else:
+    p_oped=np.load("data/p_oped.npy")
+    j=np.load("data/j.npy")
+    rho_oped=np.load("data/rho_oped.npy")
 # rho_ini = vf*np.ones((len(problem.fe.flex_inds), 1))
 # rho,j=optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints )
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
@@ -280,7 +288,7 @@ sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
 sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0]*scale_x*resolution2/resolution)
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]*scale_y*resolution2/resolution)
 
-Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*55 #50
+Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*50 #50
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
 meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
@@ -362,7 +370,7 @@ optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizatio
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,
-                       "heaviside": True, "control": True,
+                       "heaviside": True, "control": False,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                        "immortal": []}
 """revise para"""
@@ -382,7 +390,7 @@ p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
 # optimizationParams2["paras_at"] = (optimizationParams2["sites_num"] * 6, optimizationParams2["sites_num"] * 8)
 #
 # problem2.op = optimizationParams2
-# problem2.setTarget(j*5)
+problem2.setTarget(j*0)
 # cauchy_points=sites.copy()
 
 p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,

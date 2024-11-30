@@ -469,6 +469,7 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             print(f"MMA solver...")
             rho = generate_rho(optiPara, p, epoch=loop)
             jax_fem.numpy2stl.generate_stl_from_matrix(rho,threshold=0.5,cube_size=1,filename=f'{loop + optiPara["lastIters"]}')
+            np.save(f'data/vtk/{loop + optiPara["lastIters"]}.npy', rho)
             ####render windows and save fig
             sites=p[0:optiPara["sites_num"]*optiPara["dim"]].reshape(optiPara["sites_num"],optiPara["dim"])
             plt.clf()
