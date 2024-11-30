@@ -96,10 +96,8 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     # k = ((1 / normal_distribution(mu, mu, sigma)) * mushroom).squeeze()
     # cos = normal_distribution(cos, mu=mu, sigma=sigma) * k * (-1) + 1
     ##### 桃子
-    sigma = 1. / 10
+    sigma = 1. / 30
     mu = 1
-    kr=0.001
-    mushroom = kr * np.power(dist_xxm, -2) + 1
     # mushroom = 1
     k = ((1 / normal_distribution(mu, mu, sigma)) * 1).squeeze()
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
@@ -111,7 +109,6 @@ def d_mahalanobis_masked(x, xm, xs,Dm):
     # cos_mask=normal_distribution(dist_matrix, mu_mask, sigma_mask)*k_mask
     #### sigmoid range
     # x0=20 #用于valley消失于多远
-    cos_mask=1
     cos_mask=sigmoid(0.1 * (dist_exmxs-dist_exxm)).squeeze()
     return (cos**cos_mask)*dist_matrix
 
@@ -246,22 +243,32 @@ def generate_gene_random(op, Nx, Ny) -> np.ndarray:
 
 if __name__ == '__main__':
     start_time = time.time()  # 计时起点
-    x_len = 400
+    x_len = 200
     y_len = 200
     resolution=0.01
     coords = np.indices((x_len, y_len))
     coordinates = np.stack(coords, axis=-1)*resolution
     cauchy_field = coordinates.copy()
 
-    sites=np.array(([30,50],[80,50],))*resolution
-    cauchy_points=np.array(([70,30],[90,50]))*resolution
+    sites=np.array(([50,0],[50,50],
+                    [25,25],[75,25],
+                    [50,100],
+                    [25,75],[75,75]))*resolution*2
+    cauchy_points=np.array(([50,0],[50,50],
+                            [20,25],[80,25],
+                            [50,100],
+                            [20,75],[80,75]))*resolution*2
     # np.random.seed(0)
     # sites = np.random.randint(low=0, high=100, size=(40, 2))
     # cauchy_points = sites.copy()
     # cauchy_points = cauchy_points+cauchy_points *np.random.normal(loc=0, scale=1, size=cauchy_points.shape)
 
-    Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    Dm[0] = np.array(([2, 0], [0, 1]))
+    Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    Dm[2] = np.array(([250, 0], [0, 250]))
+    Dm[3] = np.array(([250, 0], [0, 250]))
+    Dm[5] = np.array(([250, 0], [0, 250]))
+    Dm[6] = np.array(([250, 0], [0, 250]))
+
 
     # fig = plt.figure()
     # ax = fig.add_subplot(111, projection='3d')

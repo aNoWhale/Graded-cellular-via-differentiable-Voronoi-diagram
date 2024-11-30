@@ -64,7 +64,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
 
 def rho_cell_mm(cell, sites, *args):
     dist_f = d_mahalanobis_masked_cell(cell,sites,*args)  # N
-    # etas = np.array([1e-20])
+    etas = np.array([1e-20])
     # dist = np.concatenate((dist_f, etas), axis=0)
     dist=dist_f
     negative_dist= -1*dist

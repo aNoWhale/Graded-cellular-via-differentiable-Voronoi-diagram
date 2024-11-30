@@ -156,7 +156,9 @@ def rho_cell_m(cell, sites, *args):
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
-
+def add_edge(field):
+    field=field.at[-1,:].set(field[-1,:]+1)
+    return field
 
 def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     assert field.shape[-1] == 2
@@ -217,7 +219,7 @@ def generate_voronoi_separate(para, p, **kwargs):
         field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
     else:
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
-
+    field=add_edge(field)
     # field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
     # field=field*para["boundary"]
     if "heaviside" in para and para["heaviside"] is True:
