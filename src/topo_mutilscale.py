@@ -268,10 +268,14 @@ scale_y = 3
 scale_x = 3
 Nx2,Ny2=Nx*scale_x,Ny*scale_y
 Lx2,Ly2=Nx2*resolution2,Ny2*resolution2
-coordinates = np.indices((Nx2, Ny2))*resolution2
+padding_size=20 # pixel
+coordinates = np.indices((Nx2, Ny2+padding_size*2))*resolution2
+
 # 使用 zoom 进行缩放
 rho_oped=rho_oped.reshape(Nx,Ny)
 rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
+padding=np.zeros((Nx2,padding_size))
+rho_oped=np.concatenate((padding,rho_oped,padding ), axis=1)
 rho_oped=rho_oped.ravel()
 """""""""""""""""""""""""""""""""infill reconstruct"""""""""""""""""""""""""""""""""
 rho=rho_oped.reshape((Nx2, Ny2))
@@ -287,7 +291,7 @@ last_vf=np.mean(rho_oped)
 sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
 sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0]*scale_x*resolution2/resolution)
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]*scale_y*resolution2/resolution)
-
+sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]+padding_size*resolution2)
 Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*50 #50
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
@@ -366,7 +370,7 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # print(f"Dm_boundary:{Dm_boundary}")
 optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates,"resolution":resolution2,
-                       "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
+                       "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,"padding_size":padding_size,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,"Lx":Lx2, "Ly":Ly2,
