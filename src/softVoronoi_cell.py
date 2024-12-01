@@ -13,8 +13,9 @@ import ultilies as ut
 @jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
     gamma = 2 ** (epoch // 5)
-    field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
-                np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
+    # field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
+    #             np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
+    field=sigmoid(gamma*(field-0.5))
     return field
 
 @jax.jit
@@ -157,7 +158,7 @@ def rho_cell_m(cell, sites, *args):
     return rho
 
 def add_edge(field):
-    field=field.at[-1,:].set(field[-1,:]+1)
+    field=field.at[-1:,:].set(1)
     return field
 
 def voronoi_field(field, sites, rho_fn: Callable, **kwargs):

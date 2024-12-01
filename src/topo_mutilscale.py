@@ -363,7 +363,7 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 
 # sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
 # Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
-print(f"Dm_boundary:{Dm_boundary}")
+# print(f"Dm_boundary:{Dm_boundary}")
 optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates,"resolution":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
