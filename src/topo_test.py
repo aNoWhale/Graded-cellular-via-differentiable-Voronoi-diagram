@@ -7,21 +7,23 @@ import jax.numpy as np
 import os
 import glob
 import matplotlib.pyplot as plt
-
+import sys
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+jax_fem_voronoi_dir = os.path.join(parent_dir, 'jax-fem-voronoi')
+src_dir = os.path.join(parent_dir, 'src')
+sys.path.append(jax_fem_voronoi_dir)
+sys.path.append(src_dir)
 # Import JAX-FEM specific modules.
 from jax_fem.problem import Problem
 from jax_fem.solver import solver, ad_wrapper
 from jax_fem.utils import save_sol
 from jax_fem.generate_mesh import get_meshio_cell_type, Mesh, rectangle_mesh
-from jax_fem.mma import optimize
+from jax_fem.mma_original import optimize_rho
 # Define constitutive relationship.
 # Generally, JAX-FEM solves -div.(f(u_grad,alpha_1,alpha_2,...,alpha_N)) = b.
 # Here, we have f(u_grad,alpha_1,alpha_2,...,alpha_N) = sigma(u_grad, theta),
 # reflected by the function 'stress'. The functions 'custom_init'and 'set_params'
 # override base class methods. In particular, set_params sets the design variable theta.
-
-from softVoronoi import generate_voronoi
-from src.softVoronoi import generate_voronoi_separate
 
 
 class Elasticity(Problem):
@@ -38,7 +40,7 @@ class Elasticity(Problem):
             Emax = 70.e3
             Emin = 1e-5 * Emax
             nu = 0.3
-            penal = 1.
+            penal = 3.
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -55,7 +57,7 @@ class Elasticity(Problem):
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([-200., 0.])
+            return np.array([0., -100.])
 
         return [surface_map]
 
@@ -112,9 +114,7 @@ def fixed_location(point):
 
 
 def load_location(point):
-    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5),np.logical_and(
-        np.greater(point[1],0),np.less(point[1],Ly/2)
-    ))
+    return np.logical_and(np.isclose(point[0], Lx, atol=1e-5),np.isclose(point[1], Ly/2, atol=0.1*Ly/2+1e-5))
 
 def dirichlet_val(point):
     return 0.
@@ -300,16 +300,15 @@ numConstraints = 1
 
 # sites=p_oped[0:sites_num*dim].reshape((sites_num, dim))
 # Dm=p_oped[sites_num*dim:].reshape((sites_num,dim,dim))
-optimizationParams2 = {'maxIters': 99, 'movelimit': 0.5,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,
-                      "Nx":Nx,"Ny":Ny,"margin":margin,
+optimizationParams2 = {'maxIters': 70, 'movelimit': 0.5,"coordinates":coordinates,"sites_num":sites_num,"Dm_dim":dim,
+                      "Nx":Nx,"Ny":Ny,"margin":margin,'lastIters':0,
                       "heaviside":True,"cauchy":True,
                       "bound_low":bound_low,"bound_up":bound_up,"paras_at":(sites_num*6,sites_num*8),
                       "sites":sites,"Dm":Dm,"immortal":["sites","Dm"]}
 problem2.op=optimizationParams2
 # problem.setTarget(j*1.5)
-cauchy_points=sites.copy()
-p_ini2= np.ravel(cauchy_points)# 1-d array contains flattened: sites,Dm,cauchy points
-optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle, numConstraints,generate_voronoi_separate)
+rho_ini = vf*np.ones((len(problem.fe.flex_inds), 1))
+optimize_rho(problem2.fe, rho_ini, optimizationParams2, objectiveHandle2, consHandle, numConstraints)
 
 
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")

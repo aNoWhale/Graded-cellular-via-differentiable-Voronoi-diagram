@@ -13,9 +13,9 @@ import ultilies as ut
 @jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
     gamma = 2 ** (epoch // 5)
-    # field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
-    #             np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
-    field=sigmoid(gamma*(field-0.5))
+    field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
+                np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
+    # field=sigmoid(gamma*(field-0.5))
     return field
 
 @jax.jit
@@ -139,7 +139,7 @@ def rho_cell_mm(cell, sites, *args):
     # exp_matrices = np.exp(negative_dist)  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)
     soft = exp_matrices / sum_vals  # N
-    beta = 9 # 7
+    beta = 7 # 7 10
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -153,12 +153,12 @@ def rho_cell_m(cell, sites, *args):
     # exp_matrices = np.exp(negative_dist)  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 9  # 7
+    beta = 7  # 7 10
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
 def add_edge(field):
-    field=field.at[-1:,:].set(1)
+    field=field.at[-5:,:].set(1)
     return field
 
 def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
@@ -220,9 +220,9 @@ def generate_voronoi_separate(para, p, **kwargs):
         field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
     else:
         field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
-    field=add_edge(field)
-    # field=rho_boundary_mask(field,para["rho_mask"],kwargs['epoch'])
-    # field=field*para["boundary"]
+    ### add a bar
+    # field=add_edge(field)
+
     if "heaviside" in para and para["heaviside"] is True:
         field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
 
@@ -233,18 +233,16 @@ def generate_para_rho(para, rho_p, **kwargs):
     # generate seed
     rho=rho_p
     rho=rho.reshape(para["Nx"],para["Ny"])
-    ## 随机sites
+    # ## 随机sites
     # key = jax.random.PRNGKey(2)
     # random_numbers = jax.random.uniform(key, shape=rho.shape, minval=0.00, maxval=100.00)
     # # rho*float + x determines the point generation rate.
-    # void=0.
-    # entity=1.5 #2.
+    # void=0.1
+    # entity=2 #2. 1.5
     # sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
     ## 整齐的生成sites
     density_x=15 #pixel
-    density_y=15 #pixel
-    num_zeros_x= para["Nx"] // density_x
-    num_zeros_y= para["Ny"] // density_y
+    density_y=10 #pixel
     matrix = np.ones((para["Nx"], para["Ny"]), dtype=int)
     step_x = max(1, density_x)  # 行方向步长
     step_y = max(1, density_y)  # 列方向步长
@@ -253,6 +251,7 @@ def generate_para_rho(para, rho_p, **kwargs):
     col_indices = col_indices.ravel()  # 展平
     matrix = matrix.at[row_indices, col_indices].set(0)
     sites = np.argwhere(matrix+0.5 < rho) * para["resolution"]
+    ###
     para["sites_num"]=sites.shape[0]
     move_around=60 # seed movement 50
     sites_low = sites.ravel()-move_around*para["resolution"]
@@ -261,7 +260,7 @@ def generate_para_rho(para, rho_p, **kwargs):
     # sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
     Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     Dm_low = np.tile(np.array([[1.5, 0], [0, 1.5]]), (sites_low.shape[0], 1, 1))
-    Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
+    Dm_up = np.tile(np.array([[200, 10], [10, 200]]), (sites_low.shape[0], 1, 1))
     cp = sites.copy()
     cp_low = sites_low
     cp_up = sites_up

@@ -72,7 +72,7 @@ class Elasticity(Problem):
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([0., -100.])
+            return np.array([0., -100.]) #0 -100
 
         return [surface_map]
 
@@ -143,8 +143,8 @@ margin = 2
 """"""""""""""""first step"""""""""""""""""""""
 """define model"""
 #Nx*Ny should %100 = 0
-Nx = 100
-Ny = 50
+Nx = 100 #100
+Ny = 50 #50
 resolution=1
 Lx, Ly = Nx*resolution, Ny*resolution
 coordinates = np.indices((Nx, Ny))*resolution
@@ -154,8 +154,8 @@ mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
 # Define boundary conditions and values.
 def fixed_location(point):
     return np.isclose(point[0], 0., atol=1e-5)
-    # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
-    #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
+    # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly/2+1e-5)),
+    #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly/2+1e-5)))
 def load_location(point):
     # return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly + 1e-5))
     return np.logical_and(np.isclose(point[0], Lx, atol=1e-5), np.isclose(point[1], Ly/2, atol=0.1 * Ly/2 + 1e-5))
@@ -204,7 +204,7 @@ def objectiveHandle(p):
     J, dJ = jax.value_and_grad(J_total)(p)
     output_sol(p, J)
     return J, dJ
-vf=0.3 #0.3
+vf=0.5 #0.3
 def consHandle1(rho):
 
     # MMA solver requires (c, dc) as inputs
@@ -230,7 +230,7 @@ sites=generate_points(Lx,Ly,sx,sy)
 sites_num=sx*sy
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))*resolution
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))*resolution
-Dm_low = np.tile(np.array([[0.5, 0], [0, 0.5]]), (sites_low.shape[0], 1, 1))
+Dm_low = np.tile(np.array([[0.5, 0], [0, 0.5]]), (sites_low.shape[0], 1, 1)) #0.5
 Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
 cp_low = sites_low
 cp_up = sites_up
@@ -249,11 +249,14 @@ optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
 problem.op = optimizationParams
 p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
-if False:
+if True:
     p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
     np.save("data/p_oped.npy", p_oped)
     np.save("data/j.npy", j)
     np.save("data/rho_oped.npy", rho_oped)
+    np.save("data/vtk/p_oped.npy", p_oped)
+    np.save("data/vtk/j.npy", j)
+    np.save("data/vtk/rho_oped.npy", rho_oped)
 else:
     p_oped=np.load("data/p_oped.npy")
     j=np.load("data/j.npy")
@@ -266,10 +269,11 @@ else:
 resolution2=0.01
 scale_y = 3
 scale_x = 3
-Nx2,Ny2=Nx*scale_x,Ny*scale_y
-Lx2,Ly2=Nx2*resolution2,Ny2*resolution2
-padding_size=20 # pixel
-coordinates = np.indices((Nx2, Ny2+padding_size*2))*resolution2
+padding_size=0 # pixel
+Nx2,Ny2=Nx*scale_x,Ny*scale_y+padding_size*2
+Lx2,Ly2=Nx2*resolution2,(Ny2+padding_size*2)*resolution2
+
+coordinates = np.indices((Nx2, Ny2))*resolution2
 
 # 使用 zoom 进行缩放
 rho_oped=rho_oped.reshape(Nx,Ny)
@@ -293,6 +297,7 @@ sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0]*scale_x*resolution
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]*scale_y*resolution2/resolution)
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]+padding_size*resolution2)
 Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*50 #50
+first_step_time=time.time()
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
 meshio_mesh2 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
@@ -301,13 +306,13 @@ mesh2 = Mesh(meshio_mesh2.points, meshio_mesh2.cells_dict[cell_type])
 # Define boundary conditions and values.
 def fixed_location2(point):
     return np.isclose(point[0], 0., atol=1e-5)
-    # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)),
-    #                      np.logical_and(np.isclose(point[0], Lx, atol=0.1*Lx+1e-5),np.isclose(point[1], 0., atol=0.1*Ly+1e-5)))
+    # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx2/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly2/2+1e-5)),
+    #                      np.logical_and(np.isclose(point[0], Lx2, atol=0.1*Lx2/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly2/2+1e-5)))
 def load_location2(point):
     # return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly2 + 1e-5))
     return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], Ly2/2., atol=0.1 * Ly2/2 + 1e-5))
-    # return  np.logical_and(np.isclose(point[0], Lx/2, atol=0.1*Lx+1e-5),
-    #                        np.isclose(point[1], Ly, atol=0.1*Ly+1e-5))
+    # return  np.logical_and(np.isclose(point[0], Lx2/2, atol=0.1*Lx2+1e-5),
+    #                        np.isclose(point[1], Ly2, atol=0.1*Ly2+1e-5))
 def dirichlet_val2(point):
     return 0.
 dirichlet_bc_info2 = [[fixed_location2] * 2, [0, 1], [dirichlet_val2] * 2]
@@ -370,7 +375,8 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # print(f"Dm_boundary:{Dm_boundary}")
 optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
                        "coordinates": coordinates,"resolution":resolution2,
-                       "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,"padding_size":padding_size,
+                       "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
+                       "padding_size":padding_size,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,"Lx":Lx2, "Ly":Ly2,
@@ -403,8 +409,14 @@ p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHan
 
 """""""""""""""""""""""""""""""""""""""""""""""""""plot result"""""""""""""""""""""""""""""""""""""""""""""""""""
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
-print(f"previous J/compliance :{j}\n now error:{j_now}")
-print(f"running time:{time.time() - time_start}")
+print(f"previous J/compliance :{j}\n now J/compliance:{j_now}")
+print(f"first step time:{first_step_time-time_start}")
+print(f"second step time:{time.time()-first_step_time}")
+print(f"total running time:{time.time() - time_start}")
+print(f"first elements:{Nx}*{Ny}")
+print(f"second elements:{Nx2}*{Ny2}")
+
+
 # Plot the optimization results.
 obj = onp.array(outputs)
 obj2 = onp.array(outputs2)
