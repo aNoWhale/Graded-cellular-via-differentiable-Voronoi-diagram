@@ -287,7 +287,7 @@ def consHandle2(p):
 
 
 # Finalize the details of the MMA optimizer, and solve the TO problem.
-vf = 0.2
+vf = 0.3
 
 sites_num = 30
 dim = 2

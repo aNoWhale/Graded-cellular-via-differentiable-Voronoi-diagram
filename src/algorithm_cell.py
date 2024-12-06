@@ -64,11 +64,12 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
 
 def rho_cell_mm(cell, sites, *args):
     dist_f = d_mahalanobis_masked_cell(cell,sites,*args)  # N
-    etas = np.array([1e-20])
+    # etas = np.array([1e-20])
     # dist = np.concatenate((dist_f, etas), axis=0)
     dist=dist_f
     negative_dist= -1*dist
     exp_matrices = np.exp(negative_dist-np.max(negative_dist))  # N
+    # exp_matrices = np.exp(np.concatenate((negative_dist,np.array([-30]))))  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
     beta = 5  # 10 #5 razer 7
@@ -139,26 +140,29 @@ if __name__ == '__main__':
     start_time = time.time()  # 计时起点
     np.random.seed(0)
     print(f"running！")
-    Nx,Ny=400,200
-    resolution=0.01
+    Nx,Ny=500,500
+    resolution=0.1
     x_len = Nx*resolution
     y_len = Ny*resolution
     coords = np.indices((Nx, Ny))*resolution
     coordinates = np.stack(coords, axis=-1)
     cauchy_field = coordinates.copy()
     # coordination
-    sites=np.array(([100,100],[300,100]))*resolution
-    cp=np.array(([350,100],[300,100]))*resolution
+    # sites=np.array(([20,50],[80,50]))*resolution
+    # cp=np.array(([50,50],[80,50]))*resolution
 
-    # sites_x = np.random.randint(low=0, high=Nx, size=(36, 1))*resolution
-    # sites_y = np.random.randint(low=0, high=Ny, size=(36, 1))*resolution
-    # sites=np.concatenate((sites_x, sites_y), axis=-1)
-    # cp = sites.copy()
-    # cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
+    sites_x = np.random.randint(low=0, high=Nx, size=(30, 1))*resolution
+    sites_y = np.random.randint(low=0, high=Ny, size=(30, 1))*resolution
+    sites=np.concatenate((sites_x, sites_y), axis=-1)
+    cp = sites.copy()
+    cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
 
-    Dm = np.tile(np.array(([100.0, 0.], [0., 100.])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    Dm = np.tile(np.array(([5, 5.], [0., 5])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    # Dm =Dm + np.random.normal(loc=-0.5, scale=0.5, size=Dm.shape)
     Dm_inv = ultilies.inv_2d(Dm)
-    Dm[0] = np.array(([100, 0], [0, 200]))
+    # Dm[0] = np.array(([1, 0], [0, 1]))
+    # Dm[1] = np.array(([1, 0], [0, 1]))
+
 
     # dist_field=voronoi_field(coordinates, sites, Dm=Dm, sigmoid_sites=sigmoid_sites, sigmoid_field=sigmoid_field)
     # field=voronoi_field(coordinates, sites, Dm=Dm)
@@ -170,7 +174,7 @@ if __name__ == '__main__':
     print(f"max.field:{np.max(field)}")
     plt.imshow(field, cmap='viridis')  # 使用 'viridis' 颜色映射
     plt.colorbar(label='Pixel Value')  # 添加颜色条用于显示值的范围
-    plt.title("Pixel Values Visualized with Colors")
+    # plt.title("Pixel Values Visualized with Colors")
     plt.scatter(sites[:, 1]//resolution, sites[:, 0]//resolution, marker='+', color='r')
     print(f"total used：{time.time() - start_time:.6f} 秒")
     plt.show()
