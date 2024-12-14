@@ -20,6 +20,7 @@ import os
 from jax import config
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from jax_fem import logger
 
 config.update("jax_enable_x64", True)
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
@@ -462,31 +463,33 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
     mma.setScalingParams(1.0, np.zeros((m, 1)), 10000 * np.ones((m, 1)), np.zeros((m, 1)))
     mma.setMoveLimit(optiPara['movelimit'])
     with tqdm(total=optiPara['maxIters']) as pbar:
-        loop = 0
+        loop = 1
+
+        rho = generate_rho(optiPara, p, epoch=loop)
+        # jax_fem.numpy2stl.generate_stl_from_matrix(rho,threshold=0.5,cube_size=1,filename=f'{loop + optiPara["lastIters"]}')
+        np.save(f'data/vtk/{loop + optiPara["lastIters"]}.npy', rho)
+        ####render windows and save fig
+        sites = p[0:optiPara["sites_num"] * optiPara["dim"]].reshape(optiPara["sites_num"], optiPara["dim"])
+        plt.clf()
+        plt.imshow(rho, cmap='viridis')
+        plt.title(f"loop:{loop + optiPara['lastIters']}/{optiPara['maxIters'] + optiPara['lastIters']}")
+        plt.colorbar()
+        plt.draw()
+        plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}_np.png', dpi=600, bbox_inches='tight')
+        if "sites_boundary" in optiPara:
+            osites = np.array(optiPara["sites_boundary"])
+            plt.scatter(osites[:, 1] / optiPara["reso"], osites[:, 0] / optiPara["reso"], c="w", marker="+")
+        plt.scatter(sites[:, 1] / optiPara["reso"], sites[:, 0] / optiPara["reso"], color='r', marker='+')
+        plt.draw()
+        plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}.png', dpi=600, bbox_inches='tight')
+        plt.pause(0.01)
+        rho = rho.flatten()[:, None]
+
         while loop < optiPara['maxIters']:
             loop += 1
             pbar.update(1)
             print(f"MMA solver...")
-            rho = generate_rho(optiPara, p, epoch=loop)
-            jax_fem.numpy2stl.generate_stl_from_matrix(rho,threshold=0.5,cube_size=1,filename=f'{loop + optiPara["lastIters"]}')
-            np.save(f'data/vtk/{loop + optiPara["lastIters"]}.npy', rho)
-            ####render windows and save fig
-            sites=p[0:optiPara["sites_num"]*optiPara["dim"]].reshape(optiPara["sites_num"],optiPara["dim"])
-            plt.clf()
-            plt.imshow(rho,cmap='viridis')
-            plt.title(f"loop:{loop + optiPara['lastIters']}/{optiPara['maxIters'] + optiPara['lastIters']}")
-            plt.colorbar()
-            plt.draw()
-            plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}_np.png', dpi=600, bbox_inches='tight')
-            if "sites_boundary" in optiPara:
-                osites = np.array(optiPara["sites_boundary"])
-                plt.scatter(osites[:, 1]/optiPara["resolution"], osites[:, 0]/optiPara["resolution"], c="w", marker="+")
-            plt.scatter(sites[:,1]/optiPara["resolution"],sites[:,0]/optiPara["resolution"],color='r',marker='+')
-            plt.draw()
-            plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}.png', dpi=600, bbox_inches='tight')
-            plt.pause(0.01)
 
-            rho=rho.flatten()[:, None]
             assert rho.shape[1]==1
             J, dJ = objectiveHandle(rho) # get from rho = fun(p)
             vc, dvc = consHandle(rho) # get from rho
@@ -504,10 +507,10 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
             # vc, dvc = vc[:, None], dvc.reshape(dvc.shape[0], -1)
             J, dJ = J, dJ.reshape(-1)[:, None]
             vc, dvc = vc[:, None], dvc.squeeze()[None,:]
-            print(f"J.shape = {J.shape}")
-            print(f"dJ.shape = {dJ.shape}")
-            print(f"vc.shape = {vc.shape}")
-            print(f"dvc.shape = {dvc.shape}")
+            # print(f"J.shape = {J.shape}")
+            # print(f"dJ.shape = {dJ.shape}")
+            # print(f"vc.shape = {vc.shape}")
+            # print(f"dvc.shape = {dvc.shape}")
 
             J, dJ, vc, dvc = np.array(J), np.array(dJ), np.array(vc), np.array(dvc)
 
@@ -527,9 +530,30 @@ def optimize(fe, p_ini, optiPara, objectiveHandle, consHandle, numConstraints, g
 
             end = time.time()
 
+            rho = generate_rho(optiPara, p, epoch=loop)
+            # jax_fem.numpy2stl.generate_stl_from_matrix(rho,threshold=0.5,cube_size=1,filename=f'{loop + optiPara["lastIters"]}')
+            np.save(f'data/vtk/{loop + optiPara["lastIters"]}.npy', rho)
+            ####render windows and save fig
+            sites=p[0:optiPara["sites_num"]*optiPara["dim"]].reshape(optiPara["sites_num"],optiPara["dim"])
+            plt.clf()
+            plt.imshow(rho,cmap='viridis')
+            plt.title(f"loop:{loop + optiPara['lastIters']}/{optiPara['maxIters'] + optiPara['lastIters']}")
+            plt.colorbar()
+            plt.draw()
+            plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}_np.png', dpi=600, bbox_inches='tight')
+            if "sites_boundary" in optiPara:
+                osites = np.array(optiPara["sites_boundary"])
+                plt.scatter(osites[:, 1]/optiPara["reso"], osites[:, 0]/optiPara["reso"], c="w", marker="+")
+            plt.scatter(sites[:,1]/optiPara["reso"],sites[:,0]/optiPara["reso"],color='r',marker='+')
+            plt.draw()
+            plt.savefig(f'data/vtk/{loop + optiPara["lastIters"]}.png', dpi=600, bbox_inches='tight')
+            plt.pause(0.01)
+            rho=rho.flatten()[:, None]
+            # rho for next step
             time_elapsed = end - start
-
-            print(f"MMA took {time_elapsed} [s]")
-            print(f'Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n\n')
-
+            logger.info(f"MMA took {time_elapsed} [s]")
+            logger.info(f"Iter {loop:d}; J {J:.5f}; constraint {vc}\n\n")
+            print(f"\n\n\n")
+        print(f"MMA loop end")
+        logger.info(f"__________MMA loop end________")
     return p,J,rho

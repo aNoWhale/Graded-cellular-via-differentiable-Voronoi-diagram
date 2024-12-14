@@ -12,7 +12,7 @@ import ultilies as ut
 
 @jax.jit
 def heaviside_projection(field, eta=0.5, epoch=0):
-    gamma = 2 ** (epoch // 5)
+    gamma = 2 ** (epoch // 2)
     field = (np.tanh(gamma * eta) + np.tanh(gamma * (field - eta))) / (
                 np.tanh(gamma * eta) + np.tanh(gamma * (1 - eta)))
     # field=sigmoid(gamma*(field-0.5))
@@ -139,7 +139,7 @@ def rho_cell_mm(cell, sites, *args):
     # exp_matrices = np.exp(negative_dist)  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)
     soft = exp_matrices / sum_vals  # N
-    beta = 7 # 7 10
+    beta = 7 # 7 10 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -153,7 +153,7 @@ def rho_cell_m(cell, sites, *args):
     # exp_matrices = np.exp(negative_dist)  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 7  # 7 10
+    beta = 7  # 7 10 7
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -167,7 +167,7 @@ def voronoi_field(field, sites, rho_fn: Callable, **kwargs):
     calc_rho = jax.vmap(rho_fn, in_axes=(0, None, None))
     devices = jax.devices()
     num_devices = len(devices)
-    batch_size = kwargs.get('batch_size', 100)
+    batch_size = kwargs.get('batch_size', 20)
     if num_devices == 1:
         calc_rho_batch = calc_rho
         def process_batch(i):
@@ -228,6 +228,44 @@ def generate_voronoi_separate(para, p, **kwargs):
 
     return field.reshape(para["Nx"],para["Ny"])
 
+def generate_voronoi_separate_mesh(para, p, **kwargs):
+    ###interprate p and para into design variables
+    mesh=para["mesh"]
+    cell_coords = mesh.points[mesh.cells]
+    coordinates = cell_coords.mean(axis=1)
+    # coordinates = para["coordinates"]
+    sites_num = para["sites_num"]
+    dim = para["dim"]
+    shapes = [(sites_num, dim), (sites_num, dim, dim), (sites_num, dim)]
+    sites_len = (shapes[0][0] * shapes[0][1]) if "sites" not in para else 0
+    Dm_len = shapes[1][0] * shapes[1][1] * shapes[1][2] if "Dm" not in para else 0
+    c_len = shapes[2][0] * shapes[2][1] if "cp" not in para else 0
+    if p.shape[0] == 1 and p.shape[1] != 1:
+        p = p[0]
+    sites = para["sites"] if "sites" in para else p[0:sites_len].reshape(shapes[0][0], shapes[0][1])
+    Dm = para["Dm"] if "Dm" in para else p[sites_len:sites_len + Dm_len].reshape(shapes[1][0], shapes[1][1],
+                                                                                    shapes[1][2])
+    if "sites_boundary" in para and "Dm_boundary" in para:
+        sites=np.concatenate((sites,para["sites_boundary"]), axis=0)
+        Dm=np.concatenate((Dm,para["Dm_boundary"]), axis=0)
+
+    # coordinates = np.stack(coordinates, axis=-1)
+    if "cp" in para or para["control"]:
+        cp = para["cp"] if "cp" in para else (
+            p[sites_len + Dm_len:sites_len + Dm_len + c_len].reshape(shapes[2][0], shapes[2][1]))
+        if "sites_boundary" in para and "Dm_boundary" in para:
+            cp=np.concatenate((cp,para["sites_boundary"]), axis=0)
+        field = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm, cp=cp)
+    else:
+        field = voronoi_field(coordinates, sites,rho_cell_m, Dm=Dm)
+    ### add a bar
+    # field=add_edge(field)
+
+    if "heaviside" in para and para["heaviside"] is True:
+        field = heaviside_projection(field, eta=0.5, epoch=kwargs['epoch'])
+
+    return field.reshape(para["Nx"],para["Ny"])
+
 
 def generate_para_rho(para, rho_p, **kwargs):
     # generate seed
@@ -239,10 +277,10 @@ def generate_para_rho(para, rho_p, **kwargs):
     # # rho*float + x determines the point generation rate.
     # void=0.1
     # entity=2 #2. 1.5
-    # sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["resolution"]
+    # sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["reso"]
     ## 整齐的生成sites
-    density_x=15 #pixel
-    density_y=10 #pixel
+    density_x=15 #pixel 15
+    density_y=10 #pixel 10
     matrix = np.ones((para["Nx"], para["Ny"]), dtype=int)
     step_x = max(1, density_x)  # 行方向步长
     step_y = max(1, density_y)  # 列方向步长
@@ -250,17 +288,17 @@ def generate_para_rho(para, rho_p, **kwargs):
     row_indices = row_indices.ravel()  # 展平
     col_indices = col_indices.ravel()  # 展平
     matrix = matrix.at[row_indices, col_indices].set(0)
-    sites = np.argwhere(matrix+0.5 < rho) * para["resolution"]
+    sites = np.argwhere(matrix+0.5 < rho) * para["reso"]
     ###
     para["sites_num"]=sites.shape[0]
-    move_around=60 # seed movement 50
-    sites_low = sites.ravel()-move_around*para["resolution"]
-    sites_up = sites.ravel()+move_around*para["resolution"]
-    # sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
-    # sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["resolution"]
-    Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-    Dm_low = np.tile(np.array([[1.5, 0], [0, 1.5]]), (sites_low.shape[0], 1, 1))
-    Dm_up = np.tile(np.array([[200, 10], [10, 200]]), (sites_low.shape[0], 1, 1))
+    move_around=100 # seed movement 50 60
+    sites_low = sites.ravel()-move_around*para["reso"]
+    sites_up = sites.ravel()+move_around*para["reso"]
+    # sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["reso"]
+    # sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["reso"]
+    Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/para["reso"] # Nc*dim*dim
+    Dm_low = np.tile(np.array([[0.01, 0], [0, 0.01]]), (sites_low.shape[0], 1, 1)) #0.015
+    Dm_up = np.tile(np.array([[1.5, 1.5], [1.5, 1.5]]), (sites_low.shape[0], 1, 1))/para["reso"] #1.5 0.1 0.1 1.5
     cp = sites.copy()
     cp_low = sites_low
     cp_up = sites_up
@@ -287,7 +325,7 @@ if __name__ == '__main__':
     sites=np.array(([5,5],[3,5]))
     cp=np.array(([4,2],[5,6]))
 
-    # sites = np.random.randint(low=0 - 20, high=Nx + 20, size=(20, 2)) * resolution
+    # sites = np.random.randint(low=0 - 20, high=Nx + 20, size=(20, 2)) * reso
     # cp = sites.copy()
     # cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
 

@@ -27,6 +27,7 @@ from jax_fem.utils import save_sol
 from jax_fem.generate_mesh import get_meshio_cell_type, Mesh, rectangle_mesh
 from jax_fem.mma import optimize
 from jax_fem.mma_original import optimize_rho
+from jax_fem import logger
 # Define constitutive relationship.
 # Generally, JAX-FEM solves -div.(f(u_grad,alpha_1,alpha_2,...,alpha_N)) = b.
 # Here, we have f(u_grad,alpha_1,alpha_2,...,alpha_N) = sigma(u_grad, theta),
@@ -55,7 +56,7 @@ class Elasticity(Problem):
             Emax = 70e3
             Emin = 1e-5 * Emax
             nu = 0.3
-            penal = 1.
+            penal = 3. #1 freeend3
             E = Emin + (Emax - Emin) * theta[0] ** penal
             epsilon = 0.5 * (u_grad + u_grad.T)
             eps11 = epsilon[0, 0]
@@ -143,10 +144,13 @@ margin = 2
 """"""""""""""""first step"""""""""""""""""""""
 """define model"""
 #Nx*Ny should %100 = 0
+
+resolution=1
+Lx, Ly =100,50
 Nx = 100 #100
 Ny = 50 #50
-resolution=1
-Lx, Ly = Nx*resolution, Ny*resolution
+print(f"Nx = {Nx}, Ny = {Ny}")
+assert Nx*Ny %100 == 0
 coordinates = np.indices((Nx, Ny))*resolution
 meshio_mesh = rectangle_mesh(Nx=Nx, Ny=Ny, domain_x=Lx, domain_y=Ly)
 mesh = Mesh(meshio_mesh.points, meshio_mesh.cells_dict[cell_type])
@@ -204,7 +208,7 @@ def objectiveHandle(p):
     J, dJ = jax.value_and_grad(J_total)(p)
     output_sol(p, J)
     return J, dJ
-vf=0.5 #0.3
+vf=0.3 #0.3 0.35
 def consHandle1(rho):
 
     # MMA solver requires (c, dc) as inputs
@@ -225,22 +229,27 @@ fwd_pred = ad_wrapper(problem, solver_options={'umfpack_solver': {}}, adjoint_so
 
 
 """define parameters"""
-sx,sy=8,2
-sites=generate_points(Lx,Ly,sx,sy)
-sites_num=sx*sy
+# sx,sy=9,2 #8,2
+# sites=generate_points(Lx,Ly,sx,sy)
+# sites=sites[:-2,:]
+onp.random.seed(0)
+sites_x=onp.random.uniform(0,Lx,size=(25,1)) #20
+sites_y=onp.random.uniform(0,Ly,size=(25,1))
+sites=np.concatenate((sites_x, sites_y), axis=-1)
+sites_num=sites.shape[0]
 sites_low = np.tile(np.array([0 - margin, 0 - margin]), (sites_num, 1))*resolution
 sites_up = np.tile(np.array([Nx + margin, Ny + margin]), (sites_num, 1))*resolution
-Dm_low = np.tile(np.array([[0.5, 0], [0, 0.5]]), (sites_low.shape[0], 1, 1)) #0.5
-Dm_up = np.tile(np.array([[2, 2], [2, 2]]), (sites_low.shape[0], 1, 1))
+Dm_low = np.tile(np.array([[0.3, 0], [0, 0.3]]), (sites_low.shape[0], 1, 1)) #0.5 0.4
+Dm_up = np.tile(np.array([[1.5, 1.5], [1.5, 1.5]]), (sites_low.shape[0], 1, 1)) #2    /resolution
 cp_low = sites_low
 cp_up = sites_up
 bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low),np.ravel(cp_low)), axis=0)[:, None]
 bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)), axis=0)[:, None]
-Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/resolution  # Nc*dim*dim
 cp = sites.copy()
 
 optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
-                      "coordinates": coordinates, "sites_num": sites_num,"resolution":resolution,
+                      "coordinates": coordinates, "sites_num": sites_num,"reso":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
                       "heaviside": True, "control": False,
@@ -263,27 +272,30 @@ else:
     rho_oped=np.load("data/rho_oped.npy")
 # rho_ini = vf*np.ones((len(problem.fe.flex_inds), 1))
 # rho,j=optimize_rho(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints )
+first_full=J_total(np.ones((len(problem.fe.flex_inds), 1)))
+logger.info(f"As a reminder, compliance = {first_full} for full material")
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
-
+print(f"zooming up......")
 # 计算缩放比例
-resolution2=0.01
-scale_y = 3
-scale_x = 3
-padding_size=0 # pixel
-Nx2,Ny2=Nx*scale_x,Ny*scale_y+padding_size*2
-Lx2,Ly2=Nx2*resolution2,(Ny2+padding_size*2)*resolution2
-
+scale = 3
+resolution2=round(resolution/scale,4)
+padding_size=10 # pixel
+Lx2,Ly2=Lx,Ly+padding_size*2*resolution2
+Nx2,Ny2= Nx * scale, Ny * scale + padding_size * 2
+print(f"Nx2 = {Nx2}, Ny2 = {Ny2}")
 coordinates = np.indices((Nx2, Ny2))*resolution2
 
 # 使用 zoom 进行缩放
 rho_oped=rho_oped.reshape(Nx,Ny)
-rho_oped = np.array(zoom(rho_oped, (scale_x, scale_y), order=1))  # order=1 表示线性插值
+rho_oped = np.array(zoom(rho_oped, (scale, scale), order=1))  # order=1 表示线性插值
 padding=np.zeros((Nx2,padding_size))
 rho_oped=np.concatenate((padding,rho_oped,padding ), axis=1)
 rho_oped=rho_oped.ravel()
 """""""""""""""""""""""""""""""""infill reconstruct"""""""""""""""""""""""""""""""""
 rho=rho_oped.reshape((Nx2, Ny2))
-last_vf=np.mean(rho_oped)
+# last_vf=np.mean(rho_oped)
+last_vf=vf
+
 #硬边界
 # rho_mask = rho
 # structure = ndimage.generate_binary_structure(2, 2)  # 定义结构元素
@@ -293,10 +305,10 @@ last_vf=np.mean(rho_oped)
 # rho_mask=ut.blur_edges(rho,blur_sigma=1.)
 # boundary=ut.extract_continuous_boundary(rho,threshold=0.5)
 sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
-sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0]*scale_x*resolution2/resolution)
-sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]*scale_y*resolution2/resolution)
+sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0])
+sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1])
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]+padding_size*resolution2)
-Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*50 #50
+Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*resolution2*5 #50 *resolution *0.3
 first_step_time=time.time()
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
@@ -373,8 +385,8 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
 # Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 # print(f"Dm_boundary:{Dm_boundary}")
-optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizationParams['maxIters'],"stage":1,
-                       "coordinates": coordinates,"resolution":resolution2,
+optimizationParams2 = {'maxIters': 20, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
+                       "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        "padding_size":padding_size,
                        # "sites_num": sites_num,
@@ -387,8 +399,8 @@ optimizationParams2 = {'maxIters': 10, 'movelimit': 0.2, "lastIters":optimizatio
 p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
 # optimizationParams2["sites_num"]=sites.shape[0]
 # p_ini2=cp.ravel()
-# sites_low = np.tile(np.array([0 - optimizationParams2["margin"], 0 - optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
-# sites_up = np.tile(np.array([optimizationParams2["Nx"] + optimizationParams2["margin"], optimizationParams2["Ny"] + optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["resolution"]
+# sites_low = np.tile(np.array([0 - optimizationParams2["margin"], 0 - optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["reso"]
+# sites_up = np.tile(np.array([optimizationParams2["Nx"] + optimizationParams2["margin"], optimizationParams2["Ny"] + optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["reso"]
 # Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
 # Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
 # Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
@@ -408,7 +420,8 @@ p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHan
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""plot result"""""""""""""""""""""""""""""""""""""""""""""""""""
-print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
+print(f"As a reminder, 1st_compliance = {first_full} for full material")
+print(f"As a reminder, 2rd_compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
 print(f"previous J/compliance :{j}\n now J/compliance:{j_now}")
 print(f"first step time:{first_step_time-time_start}")
 print(f"second step time:{time.time()-first_step_time}")
@@ -419,7 +432,9 @@ print(f"second elements:{Nx2}*{Ny2}")
 
 # Plot the optimization results.
 obj = onp.array(outputs)
+onp.savetxt(f"data/vtk/output1.csv", obj, delimiter=",")
 obj2 = onp.array(outputs2)
+onp.savetxt(f"data/vtk/output2.csv", obj2, delimiter=",")
 fig=plt.figure(figsize=(16, 8))
 ax1=fig.add_subplot(1, 2, 1)
 ax1.plot(onp.arange(len(obj)) + 1, obj, linestyle='-', linewidth=2, color='black')

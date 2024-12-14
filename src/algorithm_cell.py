@@ -148,8 +148,8 @@ if __name__ == '__main__':
     coordinates = np.stack(coords, axis=-1)
     cauchy_field = coordinates.copy()
     # coordination
-    # sites=np.array(([20,50],[80,50]))*resolution
-    # cp=np.array(([50,50],[80,50]))*resolution
+    # sites=np.array(([20,50],[80,50]))*reso
+    # cp=np.array(([50,50],[80,50]))*reso
 
     sites_x = np.random.randint(low=0, high=Nx, size=(30, 1))*resolution
     sites_y = np.random.randint(low=0, high=Ny, size=(30, 1))*resolution
