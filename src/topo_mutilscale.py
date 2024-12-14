@@ -327,6 +327,7 @@ def load_location2(point):
     #                        np.isclose(point[1], Ly2, atol=0.1*Ly2+1e-5))
 def dirichlet_val2(point):
     return 0.
+
 dirichlet_bc_info2 = [[fixed_location2] * 2, [0, 1], [dirichlet_val2] * 2]
 location_fns2 = [load_location2]
 def J_total2(params):
