@@ -1,4 +1,5 @@
 # Import some useful modules.
+import logging
 import time
 
 import numpy as onp
@@ -28,6 +29,8 @@ from jax_fem.generate_mesh import get_meshio_cell_type, Mesh, rectangle_mesh
 from jax_fem.mma import optimize
 from jax_fem.mma_original import optimize_rho
 from jax_fem import logger
+from jax_fem.solver import solver
+
 # Define constitutive relationship.
 # Generally, JAX-FEM solves -div.(f(u_grad,alpha_1,alpha_2,...,alpha_N)) = b.
 # Here, we have f(u_grad,alpha_1,alpha_2,...,alpha_N) = sigma(u_grad, theta),
@@ -561,6 +564,7 @@ mesh3 = Mesh(meshio_mesh2.points, meshio_mesh2.cells_dict[cell_type])
 #     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(p)
 #     c, gradc = c.reshape((1,)), gradc[None, ...]
 #     return c, gradc
+logging.info("Calculating stress problem")
 problem3 = Elasticity(mesh3, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info2,
                       location_fns=location_fns2)
 problem3.set_rho(rho_oped2)

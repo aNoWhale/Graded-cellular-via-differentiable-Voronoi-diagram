@@ -487,8 +487,8 @@ p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHan
 
 """""""""""""""""""""""""""""""""""""""""""""""""""plot result"""""""""""""""""""""""""""""""""""""""""""""""""""
 print(f"As a reminder, 1st_compliance = {first_full} for full material")
-print(f"As a reminder, 2rd_compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
-print(f"previous J/compliance :{j}\n now J/compliance:{j_now}")
+print(f"As a reminder, 2rd_value = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
+print(f"previous J/compliance/stiffness :{j}\n now J/compliance/stiffness:{j_now}")
 print(f"first step time:{first_step_time-time_start}")
 print(f"second step time:{time.time()-first_step_time}")
 print(f"total running time:{time.time() - time_start}")
