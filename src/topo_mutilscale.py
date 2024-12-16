@@ -53,7 +53,7 @@ class Elasticity(Problem):
         def stress(u_grad, theta):
             # Plane stress assumption
             # Reference: https://en.wikipedia.org/wiki/Hooke%27s_law
-            Emax = 70e3
+            Emax = 7e3 #70e3 MPa?
             Emin = 1e-5 * Emax
             nu = 0.3
             penal = 3. #1 freeend3
@@ -73,7 +73,7 @@ class Elasticity(Problem):
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([0., -100.]) #0 -100
+            return np.array([0., -200.]) #0 -100
 
         return [surface_map]
 
@@ -102,6 +102,29 @@ class Elasticity(Problem):
                                                    subset_quad_points)  # (num_selected_faces, num_face_quads, vec)
         val = np.sum(traction * u_face * nanson_scale[:, :, None])
         return np.sqrt(np.square(val - self.target))
+
+    def compute_stiffness(self, sol):
+        # 获取所有单元索引
+        cell_inds = np.arange(len(self.fe.cells))
+
+        # 获取形函数梯度和 Jacobian 行列式
+        cell_grads, jacobian_det = self.fe.get_shape_grads()  # 假设不需要 cell_inds 参数
+        # 位移梯度: strain = grad(u)
+        u_cell = sol[self.fe.cells]  # (num_cells, num_nodes, dim)，提取单元位移
+        strain = np.einsum('cnd,cqnd->cqd', u_cell, cell_grads)  # (num_cells, num_quads, dim, dim)
+
+        # 获取应力计算函数
+        stress_fn = self.get_tensor_map()  # 使用实例化的 `get_tensor_map` 函数，直接获取应力计算函数
+
+        # 计算应力
+        stress = jax.vmap(jax.vmap(stress_fn))(strain, self.internal_vars[0])  # 应力计算，theta 和 strain
+
+        # 计算能量密度: W = 0.5 * stress : strain
+        energy_density = 0.5 * np.einsum('cqij,cqij->cq', stress, strain)  # (num_cells, num_quads)
+
+        # 通过 Jacobian 行列式积分计算总刚度
+        stiffness = np.sum(energy_density * jacobian_det)  # 标量
+        return stiffness
 
     def setTarget(self, target):
         self.target = target
@@ -248,7 +271,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/resolution  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 6, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"reso":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -338,7 +361,9 @@ def J_total2(params):
     """
     # J(u(theta), theta)
     sol_list = fwd_pred2(params)
-    compliance = problem2.compute_compliance(sol_list[0])
+    # compliance = problem2.compute_compliance(sol_list[0])
+    compliance = problem2.compute_stiffness(sol_list[0])
+
     """指定目标"""
     # compliance = problem.compute_compliance_target(sol_list[0],target=0)
     return compliance
@@ -413,6 +438,7 @@ p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
 # optimizationParams2["paras_at"] = (optimizationParams2["sites_num"] * 6, optimizationParams2["sites_num"] * 8)
 #
 # problem2.op = optimizationParams2
+#stiffness
 problem2.setTarget(j*0)
 # cauchy_points=sites.copy()
 
