@@ -92,6 +92,12 @@ class Elasticity(Problem):
         self.full_params = full_params
         self.internal_vars = [thetas]
 
+    def set_rho(self,rho):
+        thetas = rho.reshape(-1, 1)
+        theta = np.repeat(thetas[:, None, :], self.fe.num_quads, axis=1)
+        self.internal_vars = [theta]
+        return thetas
+
     def compute_compliance(self, sol):
         # Surface integral
         boundary_inds = self.boundary_inds_list[0]
@@ -310,7 +316,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/resolution  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"reso":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -450,14 +456,14 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
 # Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 # print(f"Dm_boundary:{Dm_boundary}")
-optimizationParams2 = {'maxIters': 20, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
+optimizationParams2 = {'maxIters': 3, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        "padding_size":padding_size,
                        # "sites_num": sites_num,
                        "dim": dim,
                        "Nx": Nx2, "Ny": Ny2, "margin": margin,"Lx":Lx2, "Ly":Ly2,
-                       "heaviside": True, "control": True,
+                       "heaviside": True, "control": False,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                        "immortal": []}
 """revise para"""
@@ -481,8 +487,88 @@ p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
 problem2.setTarget(0.1)
 # cauchy_points=sites.copy()
 
-p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
+p_final,j_now,rho_oped2 =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
          generate_voronoi_separate)
+
+"""""""""""""""""""""""""""""""""""""""""""distortion"""""""""""""""""""""""""""""""""""""""""""
+"""define model"""
+meshio_mesh3 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
+mesh3 = Mesh(meshio_mesh2.points, meshio_mesh2.cells_dict[cell_type])
+"""define problem"""
+# Define boundary conditions and values.
+# def fixed_location3(point):
+#     return np.isclose(point[0], 0., atol=1e-5)
+#     # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx2/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly2/2+1e-5)),
+#     #                      np.logical_and(np.isclose(point[0], Lx2, atol=0.1*Lx2/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly2/2+1e-5)))
+# def load_location3(point):
+#     # return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly2 + 1e-5))
+#     return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], Ly2/2., atol=0.1 * Ly2/2 + 1e-5))
+#     # return  np.logical_and(np.isclose(point[0], Lx2/2, atol=0.1*Lx2+1e-5),
+#     #                        np.isclose(point[1], Ly2, atol=0.1*Ly2+1e-5))
+# def dirichlet_val3(point):
+#     return 0.
+#
+# dirichlet_bc_info3 = [[fixed_location3] * 2, [0, 1], [dirichlet_val3] * 2]
+# location_fns3 = [load_location3]
+# def J_total2(params):
+#     """
+#     目标函数
+#     :param params:
+#     :return:
+#     """
+#     # J(u(theta), theta)
+#     sol_list = fwd_pred2(params)
+#     # compliance = problem2.compute_compliance(sol_list[0])
+#     stiffness = problem2.compute_stiffness(sol_list[0])
+#
+#     """指定目标"""
+#     # compliance = problem.compute_compliance_target(sol_list[0],target=0)
+#     return stiffness
+# def output_sol2(params, obj_val):
+#     print(f"\nOutput solution - need to solve the forward problem again...")
+#     sol_list = fwd_pred2(params)
+#     sol = sol_list[0]
+#     vtu_path = os.path.join(data_path, f'vtk/sol_{output_sol.counter:03d}.vtu')
+#     save_sol(problem2.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
+#              cell_infos=[('theta', problem2.full_params[:, 0])], )
+#     # point_infos = [("sites", params[0:problem2.op["sites_num"] * 2].reshape(problem2.op["sites_num"], problem2.op["Dm_dim"]))]
+#     print(f"stiffness or var = {obj_val}")
+#     outputs2.append(obj_val)
+#     output_sol.counter += 1
+# def objectiveHandle2(p):
+#     """
+#     定义目标函数和梯度计算 (MMA 使用)
+#     :param p:
+#     :return:
+#     """
+#     # MMA solver requires (J, dJ) as inputs
+#     # J has shape ()
+#     # dJ has shape (...) = p.shape
+#     J, dJ = jax.value_and_grad(J_total2)(p)
+#     output_sol2(p, J)
+#     return J, dJ
+# vf=last_vf
+# def consHandle2(p):
+#
+#     # MMA solver requires (c, dc) as inputs
+#     # c should have shape (numConstraints,)
+#     # dc should have shape (numConstraints, ...)
+#     def computeGlobalVolumeConstraint(rho):
+#         # thetas = generate_voronoi(op, p)
+#         # thetas = thetas.reshape(-1, 1)
+#         g = np.mean(rho) / vf - 1.
+#         return g
+#     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(p)
+#     c, gradc = c.reshape((1,)), gradc[None, ...]
+#     return c, gradc
+problem3 = Elasticity(mesh3, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info2,
+                      location_fns=location_fns2)
+problem3.set_rho(rho_oped2)
+sol_list = solver(problem3, solver_options={'umfpack_solver': {}})
+principal_stress, principal_directions=problem3.compute_first_principal_stress(sol_list[0])
+# fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
+
+
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""plot result"""""""""""""""""""""""""""""""""""""""""""""""""""
