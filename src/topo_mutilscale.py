@@ -109,6 +109,7 @@ class Elasticity(Problem):
 
         # 获取形函数梯度和 Jacobian 行列式
         cell_grads, jacobian_det = self.fe.get_shape_grads()  # 假设不需要 cell_inds 参数
+
         # 位移梯度: strain = grad(u)
         u_cell = sol[self.fe.cells]  # (num_cells, num_nodes, dim)，提取单元位移
         strain = np.einsum('cnd,cqnd->cqd', u_cell, cell_grads)  # (num_cells, num_quads, dim, dim)
