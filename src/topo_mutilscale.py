@@ -111,17 +111,22 @@ class Elasticity(Problem):
         cell_grads, jacobian_det = self.fe.get_shape_grads()  # 假设不需要 cell_inds 参数
 
         # 位移梯度: strain = grad(u)
-        u_cell = sol[self.fe.cells]  # (num_cells, num_nodes, dim)，提取单元位移
-        strain = np.einsum('cnd,cqnd->cqd', u_cell, cell_grads)  # (num_cells, num_quads, dim, dim)
+        # u_cell = sol[self.fe.cells]  # (num_cells, num_nodes, dim)，提取单元位移
+        # strain = np.einsum('cnd,cqnd->cqd', u_cell, cell_grads)  # (num_cells, num_quads, dim, dim)
+        u_grad = self.fes[0].sol_to_grad(sol)
+        # strain = np.einsum('cnd,cqnd->cqd', u_grad, cell_grads)  # (num_cells, num_quads, dim, dim)
+        strain = 0.5 * np.einsum('cndm,cqnd->cqdm', u_grad, cell_grads)
 
         # 获取应力计算函数
         stress_fn = self.get_tensor_map()  # 使用实例化的 `get_tensor_map` 函数，直接获取应力计算函数
 
         # 计算应力
-        stress = jax.vmap(jax.vmap(stress_fn))(strain, self.internal_vars[0])  # 应力计算，theta 和 strain
+        # stress = jax.vmap(jax.vmap(stress_fn))(strain, self.internal_vars[0])  # 应力计算，theta 和 strain
+        stress = jax.vmap(jax.vmap(stress_fn))(u_grad, self.internal_vars[0])  # 应力计算，theta 和 strain
 
         # 计算能量密度: W = 0.5 * stress : strain
         energy_density = 0.5 * np.einsum('cqij,cqij->cq', stress, strain)  # (num_cells, num_quads)
+
 
         # 通过 Jacobian 行列式积分计算总刚度
         stiffness = np.sum(energy_density * jacobian_det)  # 标量
@@ -272,7 +277,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/resolution  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 6, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"reso":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -363,11 +368,11 @@ def J_total2(params):
     # J(u(theta), theta)
     sol_list = fwd_pred2(params)
     # compliance = problem2.compute_compliance(sol_list[0])
-    compliance = problem2.compute_stiffness(sol_list[0])
+    stiffness = problem2.compute_stiffness(sol_list[0])
 
     """指定目标"""
     # compliance = problem.compute_compliance_target(sol_list[0],target=0)
-    return compliance
+    return stiffness
 def output_sol2(params, obj_val):
     print(f"\nOutput solution - need to solve the forward problem again...")
     sol_list = fwd_pred2(params)
@@ -376,7 +381,7 @@ def output_sol2(params, obj_val):
     save_sol(problem2.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
              cell_infos=[('theta', problem2.full_params[:, 0])], )
     # point_infos = [("sites", params[0:problem2.op["sites_num"] * 2].reshape(problem2.op["sites_num"], problem2.op["Dm_dim"]))]
-    print(f"compliance or var = {obj_val}")
+    print(f"stiffness or var = {obj_val}")
     outputs2.append(obj_val)
     output_sol.counter += 1
 def objectiveHandle2(p):

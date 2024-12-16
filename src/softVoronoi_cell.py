@@ -279,8 +279,8 @@ def generate_para_rho(para, rho_p, **kwargs):
     # entity=2 #2. 1.5
     # sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["reso"]
     ## 整齐的生成sites
-    density_x=20 #pixel 15
-    density_y=20 #pixel 10
+    density_x=15 #pixel 15
+    density_y=10 #pixel 10
     matrix = np.ones((para["Nx"], para["Ny"]), dtype=int)
     step_x = max(1, density_x)  # 行方向步长
     step_y = max(1, density_y)  # 列方向步长
