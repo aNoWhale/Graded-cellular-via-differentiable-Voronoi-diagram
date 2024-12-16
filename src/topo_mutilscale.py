@@ -53,7 +53,7 @@ class Elasticity(Problem):
         def stress(u_grad, theta):
             # Plane stress assumption
             # Reference: https://en.wikipedia.org/wiki/Hooke%27s_law
-            Emax = 7e3 #70e3 MPa?
+            Emax = 70e3 #70e3 MPa?
             Emin = 1e-5 * Emax
             nu = 0.3
             penal = 3. #1 freeend3
@@ -67,13 +67,19 @@ class Elasticity(Problem):
             sig12 = E / (1 + nu) * eps12
             sigma = np.array([[sig11, sig12], [sig12, sig22]])
             return sigma
-
         return stress
+
+    #changkun sun added here
+    def get_tensor_strain_map(self):
+        def strain(u_grad):
+            epsilon = 0.5*(u_grad + u_grad.T)
+            return epsilon
+        return strain
 
     def get_surface_maps(self):
         def surface_map(u, x):
             # load define
-            return np.array([0., -200.]) #0 -100
+            return np.array([0., -100.]) #0 -100
 
         return [surface_map]
 
@@ -105,7 +111,7 @@ class Elasticity(Problem):
 
     def compute_stiffness(self, sol):
         # 获取所有单元索引
-        cell_inds = np.arange(len(self.fe.cells))
+        # cell_inds = np.arange(len(self.fe.cells))
 
         # 获取形函数梯度和 Jacobian 行列式
         cell_grads, jacobian_det = self.fe.get_shape_grads()  # 假设不需要 cell_inds 参数
@@ -114,16 +120,21 @@ class Elasticity(Problem):
         # u_cell = sol[self.fe.cells]  # (num_cells, num_nodes, dim)，提取单元位移
         # strain = np.einsum('cnd,cqnd->cqd', u_cell, cell_grads)  # (num_cells, num_quads, dim, dim)
         u_grad = self.fes[0].sol_to_grad(sol)
-        # strain = np.einsum('cnd,cqnd->cqd', u_grad, cell_grads)  # (num_cells, num_quads, dim, dim)
-        strain = 0.5 * np.einsum('cndm,cqnd->cqdm', u_grad, cell_grads)
-
+        #非线性
+        # strain = 0.5 * np.einsum('cndm,cqnd->cqdm', u_grad, cell_grads) # (num_cells, num_quads, dim, dim)
+        #线性
+        strain_fn=self.get_tensor_strain_map()
+        strain = jax.vmap(jax.vmap(strain_fn))(u_grad)
+        # strainmax=strain.max()
+        # strainmin=strain.min()
         # 获取应力计算函数
         stress_fn = self.get_tensor_map()  # 使用实例化的 `get_tensor_map` 函数，直接获取应力计算函数
 
         # 计算应力
         # stress = jax.vmap(jax.vmap(stress_fn))(strain, self.internal_vars[0])  # 应力计算，theta 和 strain
         stress = jax.vmap(jax.vmap(stress_fn))(u_grad, self.internal_vars[0])  # 应力计算，theta 和 strain
-
+        # stressmax=stress.max()
+        # stressmin=stress.min()
         # 计算能量密度: W = 0.5 * stress : strain
         energy_density = 0.5 * np.einsum('cqij,cqij->cq', stress, strain)  # (num_cells, num_quads)
 
@@ -131,6 +142,7 @@ class Elasticity(Problem):
         # 通过 Jacobian 行列式积分计算总刚度
         stiffness = np.sum(energy_density * jacobian_det)  # 标量
         return stiffness
+        # return np.sqrt(np.square(stiffness - self.target))
 
     def setTarget(self, target):
         self.target = target
@@ -445,7 +457,7 @@ p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
 #
 # problem2.op = optimizationParams2
 #stiffness
-problem2.setTarget(j*0)
+problem2.setTarget(0.1)
 # cauchy_points=sites.copy()
 
 p_final,j_now,_ =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
