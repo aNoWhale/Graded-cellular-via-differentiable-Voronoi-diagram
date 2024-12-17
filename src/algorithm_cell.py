@@ -155,9 +155,9 @@ if __name__ == '__main__':
     sites_y = np.random.randint(low=0, high=Ny, size=(30, 1))*resolution
     sites=np.concatenate((sites_x, sites_y), axis=-1)
     cp = sites.copy()
-    cp = cp + np.random.normal(loc=0, scale=5, size=cp.shape)
+    # cp = cp + np.tile(np.array((1,-1)),(cp.shape[0],1))
 
-    Dm = np.tile(np.array(([5, 5.], [0., 5])), (sites.shape[0], 1, 1))  # Nc*dim*dim
+    Dm = np.tile(np.array(([5, -5], [0., 5])), (sites.shape[0], 1, 1))  # Nc*dim*dim
     # Dm =Dm + np.random.normal(loc=-0.5, scale=0.5, size=Dm.shape)
     Dm_inv = ultilies.inv_2d(Dm)
     # Dm[0] = np.array(([1, 0], [0, 1]))

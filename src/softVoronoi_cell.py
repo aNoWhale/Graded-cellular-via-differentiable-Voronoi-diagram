@@ -304,9 +304,9 @@ def generate_para_rho(para, rho_p, **kwargs):
     cp_up = sites_up
     para["bound_low"] = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
     para["bound_up"] = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
-    para["paras_at"] = (0, para["sites_num"]*8)
+    para["paras_at"] = (0, para["sites_num"]*8) if para["control"] is True else (0, para["sites_num"]*6)
     # p = np.concatenate((sites.ravel(), Dm.ravel(),cp.ravel()))
-    p = np.concatenate((sites.ravel(), Dm.ravel(),cp.ravel()))
+    p = np.concatenate((sites.ravel(), Dm.ravel(),cp.ravel())) if para["control"] is True else np.concatenate((sites.ravel(), Dm.ravel()))
     print("seeds:",sites.shape[0])
     return p,para
 

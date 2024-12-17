@@ -97,7 +97,10 @@ class Elasticity(Problem):
 
     def set_rho(self,rho):
         thetas = rho.reshape(-1, 1)
-        theta = np.repeat(thetas[:, None, :], self.fe.num_quads, axis=1)
+        full_params = np.ones((self.fe.num_cells, rho.shape[1]))
+        full_params = full_params.at[self.fe.flex_inds].set(rho)
+        theta = np.repeat(full_params[:, None, :], self.fe.num_quads, axis=1)
+        self.full_params = full_params
         self.internal_vars = [theta]
         return thetas
 
@@ -163,11 +166,16 @@ class Elasticity(Problem):
         stress = jax.vmap(jax.vmap(stress_fn))(u_grad, self.internal_vars[0])  # (num_cells, num_quads, dim, dim)
         # 计算主应力和主方向
         def compute_first_principal_stress(sigma):
-            # 对每个应力张量求解特征值和特征向量
-            eigvals, eigvecs = np.linalg.eigh(sigma)  # 使用 jax 提供的 eigh
-            # 返回最大特征值（第一主应力）和对应的特征向量（第一主方向）
-            principal_stress = eigvals[:, -1]  # 取最大特征值
-            principal_direction = eigvecs[:, :, -1]  # 对应的主方向
+            # 使用 jax 进行特征值分解
+            eigvals, eigvecs = np.linalg.eigh(sigma)  # eigvals 是特征值, eigvecs 是特征向量
+            # 查看 eigvals 和 eigvecs 的形状，确认它们的维度
+            # print("eigvals:", eigvals)
+            # print("eigvecs:", eigvecs)
+            # 如果是二维矩阵，每个 sigma 可能有两个特征值
+            # 选择每个矩阵的最大特征值
+            principal_stress = eigvals[ -1]  # 获取每个矩阵的最大特征值（第一主应力）
+            # 获取对应最大特征值的特征向量
+            principal_direction = eigvecs[:, -1]  # 获取对应的特征向量
             return principal_stress, principal_direction
 
         # 使用 jax.vmap 对所有单元和积分点进行计算
@@ -329,7 +337,7 @@ optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
 problem.op = optimizationParams
 p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
-if True:
+if False:
     p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
     np.save("data/p_oped.npy", p_oped)
     np.save("data/j.npy", j)
@@ -459,7 +467,7 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
 # Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 # print(f"Dm_boundary:{Dm_boundary}")
-optimizationParams2 = {'maxIters': 3, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
+optimizationParams2 = {'maxIters': 2, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        "padding_size":padding_size,
@@ -490,95 +498,123 @@ p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
 problem2.setTarget(0.1)
 # cauchy_points=sites.copy()
 
-p_final,j_now,rho_oped2 =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
-         generate_voronoi_separate)
+# p_final,j_now,rho_oped2 =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
+#          generate_voronoi_separate)
+if False:
+    p_final, j_now, rho_oped2 = optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2,
+                                         numConstraints,
+                                         generate_voronoi_separate)
+    np.save("data/p_final.npy", p_final)
+    np.save("data/j_now.npy", j_now)
+    np.save("data/rho_oped2.npy", rho_oped2)
+    np.save("data/vtk/p_final.npy", p_final)
+    np.save("data/vtk/j_now.npy", j_now)
+    np.save("data/vtk/rho_oped2.npy", rho_oped2)
+else:
+    p_final=np.load("data/p_final.npy")
+    j_now=np.load("data/j_now.npy")
+    rho_oped2=np.load("data/rho_oped2.npy")
 
 """""""""""""""""""""""""""""""""""""""""""distortion"""""""""""""""""""""""""""""""""""""""""""
 """define model"""
 meshio_mesh3 = rectangle_mesh(Nx=Nx2, Ny=Ny2, domain_x=Lx2, domain_y=Ly2)
 mesh3 = Mesh(meshio_mesh2.points, meshio_mesh2.cells_dict[cell_type])
 """define problem"""
-# Define boundary conditions and values.
-# def fixed_location3(point):
-#     return np.isclose(point[0], 0., atol=1e-5)
-#     # return np.logical_or(np.logical_and(np.isclose(point[0], 0., atol=0.1*Lx2/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly2/2+1e-5)),
-#     #                      np.logical_and(np.isclose(point[0], Lx2, atol=0.1*Lx2/2+1e-5),np.isclose(point[1], 0., atol=0.1*Ly2/2+1e-5)))
-# def load_location3(point):
-#     # return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], 0, atol=0.1 * Ly2 + 1e-5))
-#     return np.logical_and(np.isclose(point[0], Lx2, atol=1e-5), np.isclose(point[1], Ly2/2., atol=0.1 * Ly2/2 + 1e-5))
-#     # return  np.logical_and(np.isclose(point[0], Lx2/2, atol=0.1*Lx2+1e-5),
-#     #                        np.isclose(point[1], Ly2, atol=0.1*Ly2+1e-5))
-# def dirichlet_val3(point):
-#     return 0.
-#
-# dirichlet_bc_info3 = [[fixed_location3] * 2, [0, 1], [dirichlet_val3] * 2]
-# location_fns3 = [load_location3]
-# def J_total2(params):
-#     """
-#     目标函数
-#     :param params:
-#     :return:
-#     """
-#     # J(u(theta), theta)
-#     sol_list = fwd_pred2(params)
-#     # compliance = problem2.compute_compliance(sol_list[0])
-#     stiffness = problem2.compute_stiffness(sol_list[0])
-#
-#     """指定目标"""
-#     # compliance = problem.compute_compliance_target(sol_list[0],target=0)
-#     return stiffness
-# def output_sol2(params, obj_val):
-#     print(f"\nOutput solution - need to solve the forward problem again...")
-#     sol_list = fwd_pred2(params)
-#     sol = sol_list[0]
-#     vtu_path = os.path.join(data_path, f'vtk/sol_{output_sol.counter:03d}.vtu')
-#     save_sol(problem2.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
-#              cell_infos=[('theta', problem2.full_params[:, 0])], )
-#     # point_infos = [("sites", params[0:problem2.op["sites_num"] * 2].reshape(problem2.op["sites_num"], problem2.op["Dm_dim"]))]
-#     print(f"stiffness or var = {obj_val}")
-#     outputs2.append(obj_val)
-#     output_sol.counter += 1
-# def objectiveHandle2(p):
-#     """
-#     定义目标函数和梯度计算 (MMA 使用)
-#     :param p:
-#     :return:
-#     """
-#     # MMA solver requires (J, dJ) as inputs
-#     # J has shape ()
-#     # dJ has shape (...) = p.shape
-#     J, dJ = jax.value_and_grad(J_total2)(p)
-#     output_sol2(p, J)
-#     return J, dJ
-# vf=last_vf
-# def consHandle2(p):
-#
-#     # MMA solver requires (c, dc) as inputs
-#     # c should have shape (numConstraints,)
-#     # dc should have shape (numConstraints, ...)
-#     def computeGlobalVolumeConstraint(rho):
-#         # thetas = generate_voronoi(op, p)
-#         # thetas = thetas.reshape(-1, 1)
-#         g = np.mean(rho) / vf - 1.
-#         return g
-#     c, gradc = jax.value_and_grad(computeGlobalVolumeConstraint)(p)
-#     c, gradc = c.reshape((1,)), gradc[None, ...]
-#     return c, gradc
+outputs3=[]
+def output_sol3(sol_list, obj_val,principal_stress, principal_directions,name=None):
+    print(f"\nOutput solution - need to solve the forward problem again...")
+    sol = sol_list[0]
+    arrow_start_points = problem3.fe.points[problem3.fe.cells] # 获取所有单元的节点信息
+    arrow_start_points = np.concatenate((arrow_start_points,np.zeros((arrow_start_points.shape[0],1))),axis=-1)
+    arrow_directions = np.concatenate((principal_directions,np.zeros((principal_directions.shape[0],1))),axis=-1)  # 主应力方向
+    # 定义VTU文件路径
+    filename=f"sol_{output_sol.counter:03d}" if name is None else name
+    vtu_path = os.path.join(data_path, f'vtk/{filename}.vtu')
+    # 将解及第一主应力和方向存储到VTU文件中
+    save_sol(problem3.fe, np.hstack((sol, np.zeros((len(sol), 1)))), vtu_path,
+             cell_infos=[
+                 ('theta', problem3.full_params[:, 0]),
+                 ('PrincipalStress', principal_stress),  # 添加第一主应力
+                 # ('PrincipalDirection', principal_directions)  # 添加第一主应力方向
+             ],point_infos=[('arrow_start_points',arrow_start_points),
+                            ('arrow_directions',arrow_directions)])
+    # print(f"stiffness or var = {obj_val}")
+    # outputs2.append(obj_val)
+    # output_sol.counter += 1
+    return arrow_start_points,arrow_directions,principal_stress
+
+
 logging.info("Calculating stress problem")
 problem3 = Elasticity(mesh3, vec=2, dim=2, ele_type=ele_type, dirichlet_bc_info=dirichlet_bc_info2,
                       location_fns=location_fns2)
 problem3.set_rho(rho_oped2)
 sol_list = solver(problem3, solver_options={'umfpack_solver': {}})
 principal_stress, principal_directions=problem3.compute_first_principal_stress(sol_list[0])
+
+max_principal_stress = principal_stress.max(axis=1)  # (num_cells,)，每个单元的最大主应力
+max_principal_directions = principal_directions[np.arange(principal_directions.shape[0]),
+                                               np.argmax(principal_stress, axis=1), :]  # (num_cells, 2)
+
+logging.info(f"Principal stress.shape: {principal_stress.shape}")
+logging.info(f"Principal directions.shape: {principal_directions.shape}")
+plt.clf()
+plt.imshow(max_principal_stress.reshape(Nx2,Ny2),cmap="rainbow")
+plt.draw()
+plt.savefig(f'data/vtk/max_principal_stress.png', dpi=600, bbox_inches='tight')
+
+# array_start_point,array_direction,_=output_sol3(sol_list,0,max_principal_stress,point_direction,"first_principal_stress")
 # fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
+"""""""""""""""""""""""""""""""""""""""""where max stress at"""""""""""""""""""""""""""""""""""""""""
+num_sites=optimizationParams2["sites_num"]
+sites_ori=p_final[:num_sites*2].reshape((num_sites,2))
+Dm=p_final[num_sites*2:num_sites*6].reshape((num_sites,2,2))
+max_add_num=10
 
+max_principal_stress.reshape(Nx2,Ny2)
+indices = np.argsort(max_principal_stress, axis=None)[int(-1*max_add_num):] #最大第一主应力所在的单元索引
+# rows, cols = np.unravel_index(indices, max_principal_stress.shape)
+arrow_start_points = problem3.fe.points[problem3.fe.cells]
+max_stress_position=arrow_start_points[indices,:,:]
+max_stress_position=np.mean(max_stress_position,axis=1)
+max_stress_direction=max_principal_directions[indices,:]
+max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*10)
+logging.info(f"max_stress_position.shape: {max_stress_position.shape}")
+print(max_stress_position.shape[0])
+cp_ori=sites_ori.copy()
+cp=np.concatenate((cp_ori,max_stress_position+max_stress_direction*10),axis=0)
+sites=np.concatenate((sites_ori,max_stress_position),axis=0)
+Dm=np.concatenate((Dm,np.tile(np.array(([1,0],[0,1]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0)
 
+optimizationParams3 = {'maxIters': 2, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
+                       "coordinates": coordinates,"reso":resolution2,
+                       "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
+                       "padding_size":0,
+                       "sites_num": sites.shape[0],
+                       "dim": dim,
+                       "Nx": Nx2, "Ny": Ny2, "margin": margin,"Lx":Lx2, "Ly":Ly2,
+                       "heaviside": True, "control": True,
+                       # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
+                       "immortal": []}
+p=np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cp)),axis=0)
+field=generate_voronoi_separate(optimizationParams3,p,epoch=2)
+plt.clf()
+plt.imshow(field,cmap="viridis")
+plt.draw()
+plt.savefig(f'data/vtk/inserted_np.png', dpi=600, bbox_inches='tight')
+plt.scatter(max_stress_position[:,1]/resolution2,max_stress_position[:,0]/resolution2,marker='+',c='violet')
+plt.draw()
+plt.savefig(f'data/vtk/inserted.png', dpi=600, bbox_inches='tight')
+plt.scatter(sites_ori[:,1]/resolution2,sites_ori[:,0]/resolution2,marker='+',c='r')
+plt.draw()
+plt.savefig(f'data/vtk/inserted_sites.png', dpi=600, bbox_inches='tight')
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""plot result"""""""""""""""""""""""""""""""""""""""""""""""""""
 print(f"As a reminder, 1st_compliance = {first_full} for full material")
 print(f"As a reminder, 2rd_compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
 print(f"previous J/compliance :{j}\n now J/compliance:{j_now}")
+print(f"Principal stress.shape: {principal_stress.shape}")
+print(f"Principal directions.shape: {principal_directions.shape}")
 print(f"first step time:{first_step_time-time_start}")
 print(f"second step time:{time.time()-first_step_time}")
 print(f"total running time:{time.time() - time_start}")
