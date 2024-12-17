@@ -327,7 +327,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/resolution  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"reso":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -337,6 +337,7 @@ optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
 problem.op = optimizationParams
 p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
+"""first step"""
 if False:
     p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
     np.save("data/p_oped.npy", p_oped)
@@ -467,7 +468,7 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
 # Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 # print(f"Dm_boundary:{Dm_boundary}")
-optimizationParams2 = {'maxIters': 2, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
+optimizationParams2 = {'maxIters': 10, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        "padding_size":padding_size,
@@ -500,7 +501,8 @@ problem2.setTarget(0.1)
 
 # p_final,j_now,rho_oped2 =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
 #          generate_voronoi_separate)
-if False:
+"""second step"""
+if True:
     p_final, j_now, rho_oped2 = optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2,
                                          numConstraints,
                                          generate_voronoi_separate)
@@ -568,7 +570,7 @@ plt.savefig(f'data/vtk/max_principal_stress.png', dpi=600, bbox_inches='tight')
 num_sites=optimizationParams2["sites_num"]
 sites_ori=p_final[:num_sites*2].reshape((num_sites,2))
 Dm=p_final[num_sites*2:num_sites*6].reshape((num_sites,2,2))
-max_add_num=10
+max_add_num=200 #150
 
 max_principal_stress.reshape(Nx2,Ny2)
 indices = np.argsort(max_principal_stress, axis=None)[int(-1*max_add_num):] #最大第一主应力所在的单元索引
@@ -577,15 +579,15 @@ arrow_start_points = problem3.fe.points[problem3.fe.cells]
 max_stress_position=arrow_start_points[indices,:,:]
 max_stress_position=np.mean(max_stress_position,axis=1)
 max_stress_direction=max_principal_directions[indices,:]
-max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*10)
+max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*15) #15 18
 logging.info(f"max_stress_position.shape: {max_stress_position.shape}")
-print(max_stress_position.shape[0])
+print(f"max_stress_position.shape:{max_stress_position.shape[0]}")
 cp_ori=sites_ori.copy()
 cp=np.concatenate((cp_ori,max_stress_position+max_stress_direction*10),axis=0)
 sites=np.concatenate((sites_ori,max_stress_position),axis=0)
-Dm=np.concatenate((Dm,np.tile(np.array(([1,0],[0,1]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0)
+Dm=np.concatenate((Dm,np.tile(np.array(([0.9,0],[0,0.9]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0) #0.9
 
-optimizationParams3 = {'maxIters': 2, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
+optimizationParams3 = {'maxIters': 1, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        "padding_size":0,
@@ -596,7 +598,7 @@ optimizationParams3 = {'maxIters': 2, 'movelimit': 0.1, "lastIters":optimization
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                        "immortal": []}
 p=np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cp)),axis=0)
-field=generate_voronoi_separate(optimizationParams3,p,epoch=2)
+field=generate_voronoi_separate(optimizationParams3,p,epoch=20)
 plt.clf()
 plt.imshow(field,cmap="viridis")
 plt.draw()
