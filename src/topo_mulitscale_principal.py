@@ -585,8 +585,17 @@ print(f"max_stress_position.shape:{max_stress_position.shape[0]}")
 cp_ori=sites_ori.copy()
 cp=np.concatenate((cp_ori,max_stress_position+max_stress_direction*10),axis=0)
 sites=np.concatenate((sites_ori,max_stress_position),axis=0)
-Dm=np.concatenate((Dm,np.tile(np.array(([0.9,0],[0,0.9]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0) #0.9
 
+# Dm=np.concatenate((Dm,np.tile(np.array(([0.7,0],[0,0.7]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0) #0.9
+# Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1)) / para["reso"]  # Nc*dim*dim
+# Dm_low = np.tile(np.array([[0.005, 0], [0, 0.005]]), (sites_low.shape[0], 1, 1))  # 0.015 0.01
+# Dm_up = np.tile(np.array([[1.5, 1.5], [1.5, 1.5]]), (sites_low.shape[0], 1, 1)) / para["reso"]  # 1.5 0.1 0.1 1.5
+# cp = sites.copy()
+# cp_low = sites_low
+# cp_up = sites_up
+# bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
+# bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
+# paras_at = (0, optimizationParams3["sites_num"] * 8)
 optimizationParams3 = {'maxIters': 1, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
@@ -597,8 +606,13 @@ optimizationParams3 = {'maxIters': 1, 'movelimit': 0.1, "lastIters":optimization
                        "heaviside": True, "control": True,
                        # "bound_low": bound_low, "bound_up": bound_up, "paras_at": (0, bound_low.shape[0]),
                        "immortal": []}
+
+
 p=np.concatenate((np.ravel(sites),np.ravel(Dm),np.ravel(cp)),axis=0)
 field=generate_voronoi_separate(optimizationParams3,p,epoch=20)
+
+
+
 plt.clf()
 plt.imshow(field,cmap="viridis")
 plt.draw()

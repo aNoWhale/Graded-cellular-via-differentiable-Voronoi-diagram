@@ -123,7 +123,7 @@ def d_mahalanobis_masked_cell(cell, sites, Dm, cp, *args):
     cos = np.abs((diff_sc @ diff_sx.swapaxes(-1, -2)).squeeze() / (dist_sx * dist_sc)).squeeze()  # N
     sigma = 1. / 10  #  1/30 1/15
     mu = 1
-    scale = 2  # 1
+    scale = 3  # 1
     k = (1 / normal_distribution(mu, mu, sigma)) * scale
     cos = normal_distribution(cos, mu=mu, sigma=sigma) * k + 1
     cos_mask = sigmoid(0.1*(dist_sc-dist_sx))
@@ -139,7 +139,7 @@ def rho_cell_mm(cell, sites, *args):
     # exp_matrices = np.exp(negative_dist)  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)
     soft = exp_matrices / sum_vals  # N
-    beta =  5 # 7 10 7
+    beta =  4 # 7 10 7 5
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -153,7 +153,7 @@ def rho_cell_m(cell, sites, *args):
     # exp_matrices = np.exp(negative_dist)  # N
     sum_vals = np.sum(exp_matrices, axis=0, keepdims=True)  # 1
     soft = exp_matrices / sum_vals  # N
-    beta = 5  # 7 10 7
+    beta = 4  # 7 10 7 5
     rho = 1 - np.sum(soft ** beta, axis=0)
     return rho
 
@@ -280,7 +280,7 @@ def generate_para_rho(para, rho_p, **kwargs):
     # sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["reso"]
     ## 整齐的生成sites
     density_x=20 #pixel 15
-    density_y=15 #pixel 10
+    density_y=18 #pixel 10
     matrix = np.ones((para["Nx"], para["Ny"]), dtype=int)
     step_x = max(1, density_x)  # 行方向步长
     step_y = max(1, density_y)  # 列方向步长
