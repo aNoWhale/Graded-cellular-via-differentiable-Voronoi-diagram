@@ -370,7 +370,7 @@ sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
 sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0])
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1])
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]+padding_size*resolution2)
-Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*resolution2*5 #50 *resolution *0.3
+Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*resolution2*5 #50 *resolution *0.3  #*5
 first_step_time=time.time()
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""

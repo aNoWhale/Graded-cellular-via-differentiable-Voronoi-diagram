@@ -279,8 +279,8 @@ def generate_para_rho(para, rho_p, **kwargs):
     # entity=2 #2. 1.5
     # sites = np.argwhere(random_numbers < (rho*(entity-void))+void )*para["reso"]
     ## 整齐的生成sites
-    density_x=20 #pixel 15
-    density_y=18 #pixel 10
+    density_x=15 #pixel 15
+    density_y=20 #pixel 10
     matrix = np.ones((para["Nx"], para["Ny"]), dtype=int)
     step_x = max(1, density_x)  # 行方向步长
     step_y = max(1, density_y)  # 列方向步长
@@ -291,14 +291,14 @@ def generate_para_rho(para, rho_p, **kwargs):
     sites = np.argwhere(matrix+0.5 < rho) * para["reso"]
     ###
     para["sites_num"]=sites.shape[0]
-    move_around=100 # seed movement 50 60
+    move_around=120 # seed movement 50 60
     sites_low = sites.ravel()-move_around*para["reso"]
     sites_up = sites.ravel()+move_around*para["reso"]
     # sites_low = np.tile(np.array([0 - para["margin"], 0 - para["margin"]]), (para["sites_num"], 1)) * para["reso"]
     # sites_up = np.tile(np.array([para["Nx"] + para["margin"], para["Ny"] + para["margin"]]), (para["sites_num"], 1)) * para["reso"]
     Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/para["reso"] # Nc*dim*dim
     Dm_low = np.tile(np.array([[0.005, 0], [0, 0.005]]), (sites_low.shape[0], 1, 1)) #0.015 0.01
-    Dm_up = np.tile(np.array([[1.5, 1.5], [1.5, 1.5]]), (sites_low.shape[0], 1, 1))/para["reso"] #1.5 0.1 0.1 1.5
+    Dm_up = np.tile(np.array([[3, 3], [3, 3]]), (sites_low.shape[0], 1, 1))/para["reso"] #1.5 1.5 1.5 1.5
     cp = sites.copy()
     cp_low = sites_low
     cp_up = sites_up

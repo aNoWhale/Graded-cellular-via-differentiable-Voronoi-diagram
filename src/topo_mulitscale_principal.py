@@ -388,7 +388,7 @@ sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
 sites_boundary=sites_boundary.at[:,0].set(sites_boundary[:,0])
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1])
 sites_boundary=sites_boundary.at[:,1].set(sites_boundary[:,1]+padding_size*resolution2)
-Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*resolution2*5 #50 *resolution *0.3
+Dm_boundary=p_oped[optimizationParams["sites_num"]*2:].reshape((-1,2,2))*resolution2*6 #50 *resolution *0.3 #6
 first_step_time=time.time()
 """""""""""""""""""""""""""""""""""""""""""""second step"""""""""""""""""""""""""""""""""""""""""""""
 """define model"""
@@ -480,27 +480,9 @@ optimizationParams2 = {'maxIters': 10, 'movelimit': 0.1, "lastIters":optimizatio
                        "immortal": []}
 """revise para"""
 p_ini2,optimizationParams2=generate_para_rho(optimizationParams2, rho_oped)
-# optimizationParams2["sites_num"]=sites.shape[0]
-# p_ini2=cp.ravel()
-# sites_low = np.tile(np.array([0 - optimizationParams2["margin"], 0 - optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["reso"]
-# sites_up = np.tile(np.array([optimizationParams2["Nx"] + optimizationParams2["margin"], optimizationParams2["Ny"] + optimizationParams2["margin"]]), (optimizationParams2["sites_num"], 1)) * optimizationParams2["reso"]
-# Dm = np.tile(np.array(([100, 0], [0, 100])), (sites.shape[0], 1, 1))  # Nc*dim*dim
-# Dm_low = np.tile(np.array([[0.1, 0], [0, 0.1]]), (sites_low.shape[0], 1, 1))
-# Dm_up = np.tile(np.array([[200, 200], [200, 200]]), (sites_low.shape[0], 1, 1))
-# cp = sites.copy()
-# cp_low = cp.ravel()-30
-# cp_up = cp.ravel()+30
-# optimizationParams2["bound_low"] = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
-# optimizationParams2["bound_up"] = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
-# optimizationParams2["paras_at"] = (optimizationParams2["sites_num"] * 6, optimizationParams2["sites_num"] * 8)
-#
-# problem2.op = optimizationParams2
-#stiffness
-problem2.setTarget(0.1)
-# cauchy_points=sites.copy()
 
-# p_final,j_now,rho_oped2 =optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2, numConstraints,
-#          generate_voronoi_separate)
+problem2.setTarget(0.1)
+
 """second step"""
 if True:
     p_final, j_now, rho_oped2 = optimize(problem2.fe, p_ini2, optimizationParams2, objectiveHandle2, consHandle2,
@@ -557,6 +539,7 @@ max_principal_stress = principal_stress.max(axis=1)  # (num_cells,)，每个单�
 max_principal_directions = principal_directions[np.arange(principal_directions.shape[0]),
                                                np.argmax(principal_stress, axis=1), :]  # (num_cells, 2)
 
+
 logging.info(f"Principal stress.shape: {principal_stress.shape}")
 logging.info(f"Principal directions.shape: {principal_directions.shape}")
 plt.clf()
@@ -580,22 +563,15 @@ max_stress_position=arrow_start_points[indices,:,:]
 max_stress_position=np.mean(max_stress_position,axis=1)
 max_stress_direction=max_principal_directions[indices,:]
 max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*15) #15 18
+
+max_stress_direction=np.stack((max_stress_direction[:,1]*-1,max_stress_direction[:,0]),axis=1) # vertical vector
 logging.info(f"max_stress_position.shape: {max_stress_position.shape}")
 print(f"max_stress_position.shape:{max_stress_position.shape[0]}")
 cp_ori=sites_ori.copy()
 cp=np.concatenate((cp_ori,max_stress_position+max_stress_direction*10),axis=0)
 sites=np.concatenate((sites_ori,max_stress_position),axis=0)
 
-# Dm=np.concatenate((Dm,np.tile(np.array(([0.7,0],[0,0.7]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0) #0.9
-# Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1)) / para["reso"]  # Nc*dim*dim
-# Dm_low = np.tile(np.array([[0.005, 0], [0, 0.005]]), (sites_low.shape[0], 1, 1))  # 0.015 0.01
-# Dm_up = np.tile(np.array([[1.5, 1.5], [1.5, 1.5]]), (sites_low.shape[0], 1, 1)) / para["reso"]  # 1.5 0.1 0.1 1.5
-# cp = sites.copy()
-# cp_low = sites_low
-# cp_up = sites_up
-# bound_low = np.concatenate((np.ravel(sites_low), np.ravel(Dm_low), np.ravel(cp_low)), axis=0)[:, None]
-# bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up), np.ravel(cp_up)), axis=0)[:, None]
-# paras_at = (0, optimizationParams3["sites_num"] * 8)
+Dm= np.concatenate((Dm,np.tile(np.array(([0.6,0],[0,0.6]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0) #0.9
 optimizationParams3 = {'maxIters': 1, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
