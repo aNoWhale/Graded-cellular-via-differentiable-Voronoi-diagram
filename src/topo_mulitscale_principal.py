@@ -562,7 +562,8 @@ arrow_start_points = problem3.fe.points[problem3.fe.cells]
 max_stress_position=arrow_start_points[indices,:,:]
 max_stress_position=np.mean(max_stress_position,axis=1)
 max_stress_direction=max_principal_directions[indices,:]
-max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*15) #15 18
+
+max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*15) #15 18 15
 
 max_stress_direction=np.stack((max_stress_direction[:,1]*-1,max_stress_direction[:,0]),axis=1) # vertical vector
 logging.info(f"max_stress_position.shape: {max_stress_position.shape}")
@@ -571,7 +572,7 @@ cp_ori=sites_ori.copy()
 cp=np.concatenate((cp_ori,max_stress_position+max_stress_direction*10),axis=0)
 sites=np.concatenate((sites_ori,max_stress_position),axis=0)
 
-Dm= np.concatenate((Dm,np.tile(np.array(([0.6,0],[0,0.6]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0) #0.9
+Dm= np.concatenate((Dm,np.tile(np.array(([0.7,0],[0,0.7]))/resolution2,reps=(max_stress_position.shape[0],1,1))),axis=0) #0.9
 optimizationParams3 = {'maxIters': 1, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
