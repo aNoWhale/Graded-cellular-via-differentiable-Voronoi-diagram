@@ -224,10 +224,10 @@ margin = 2
 """define model"""
 #Nx*Ny should %100 = 0
 
-resolution=1
-Lx, Ly =100,50
-Nx = 100 #100
+Lx, Ly =0.5,0.5#100 50
+Nx = 50 #100
 Ny = 50 #50
+resolution=Lx/Nx
 print(f"Nx = {Nx}, Ny = {Ny}")
 assert Nx*Ny %100 == 0
 coordinates = np.indices((Nx, Ny))*resolution
@@ -327,7 +327,7 @@ bound_up = np.concatenate((np.ravel(sites_up), np.ravel(Dm_up),np.ravel(cp_up)),
 Dm = np.tile(np.array(([1, 0], [0, 1])), (sites.shape[0], 1, 1))/resolution  # Nc*dim*dim
 cp = sites.copy()
 
-optimizationParams = {'maxIters': 70, 'movelimit': 0.1, "lastIters":0,"stage":0,
+optimizationParams = {'maxIters': 2, 'movelimit': 0.1, "lastIters":0,"stage":0,
                       "coordinates": coordinates, "sites_num": sites_num,"reso":resolution,
                       "dim": dim,
                       "Nx": Nx, "Ny": Ny, "margin": margin,
@@ -338,7 +338,7 @@ problem.op = optimizationParams
 p_ini=np.concatenate((sites.ravel(), Dm.ravel()))
 numConstraints = 1
 """first step"""
-if False:
+if True:
     p_oped, j ,rho_oped= optimize(problem.fe, p_ini, optimizationParams, objectiveHandle, consHandle1, numConstraints,softVoronoi.generate_voronoi_separate )
     np.save("data/p_oped.npy", p_oped)
     np.save("data/j.npy", j)
@@ -468,7 +468,7 @@ fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_
 # sites=p_oped[:optimizationParams["sites_num"]*2].reshape((optimizationParams["sites_num"], 2))
 # Dm=p_oped[-optimizationParams["sites_num"]*4:].reshape((optimizationParams["sites_num"], 2,2))
 # print(f"Dm_boundary:{Dm_boundary}")
-optimizationParams2 = {'maxIters': 10, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
+optimizationParams2 = {'maxIters': 2, 'movelimit': 0.1, "lastIters":optimizationParams['maxIters'],"stage":1, #limit0.2
                        "coordinates": coordinates,"reso":resolution2,
                        "sites_boundary":sites_boundary,"Dm_boundary":Dm_boundary,
                        "padding_size":padding_size,
@@ -592,6 +592,7 @@ field=generate_voronoi_separate(optimizationParams3,p,epoch=20)
 
 plt.clf()
 plt.imshow(field,cmap="viridis")
+plt.colorbar()
 plt.draw()
 plt.savefig(f'data/vtk/inserted_np.png', dpi=600, bbox_inches='tight')
 plt.scatter(max_stress_position[:,1]/resolution2,max_stress_position[:,0]/resolution2,marker='+',c='violet')
