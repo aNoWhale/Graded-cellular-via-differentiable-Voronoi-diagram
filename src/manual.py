@@ -363,22 +363,22 @@ plt.savefig(f'block/7_max_principal_stress.png', dpi=600, bbox_inches='tight')
 # fwd_pred2 = ad_wrapper(problem2, solver_options={'umfpack_solver': {}}, adjoint_solver_options={'umfpack_solver': {}})
 """""""""""""""""""""""""""""""""""""""""where max stress at"""""""""""""""""""""""""""""""""""""""""
 sites_ori=sites
-max_add_num=350 #150 200
+max_add_num=100 #150 200
 # max_principal_stress.reshape(Nx2,Ny2)
-start_x=[int(Nx2/2)-15,int(Nx2*1/4)-10]
-end_x=[int(Nx2/2)+5,int(Nx2*1/4)+10]
-indices=np.array([]).astype(int)
-for i in range(len(start_x)):
-    start=start_x[i]
-    end=end_x[i]
-    local_stress=max_principal_stress[start*Ny2:end*Ny2+1]
-    local_directions=max_principal_directions[start*Ny2:end*Ny2+1]
-    indi = np.argsort(local_stress, axis=None)[int(-1*max_add_num):]
-    indi = indi+start*Ny2
-    indices=np.concatenate((indices, indi),axis=0)
-# indices = np.argsort(max_principal_stress, axis=None)[int(-1*max_add_num):] #最大第一主应力所在的单元索引
-# min_indices = np.argsort(max_principal_stress, axis=None)[:int(max_add_num)] #最大第一主应力所在的单元索引
-# indices=np.concatenate((indices, min_indices),axis=0)
+# start_x=[int(Nx2/2)-15,int(Nx2*1/4)-10]
+# end_x=[int(Nx2/2)+5,int(Nx2*1/4)+10]
+# indices=np.array([]).astype(int)
+# for i in range(len(start_x)):
+#     start=start_x[i]
+#     end=end_x[i]
+#     local_stress=max_principal_stress[start*Ny2:end*Ny2+1]
+#     local_directions=max_principal_directions[start*Ny2:end*Ny2+1]
+#     indi = np.argsort(local_stress, axis=None)[int(-1*max_add_num):]
+#     indi = indi+start*Ny2
+#     indices=np.concatenate((indices, indi),axis=0)
+indices = np.argsort(max_principal_stress, axis=None)[int(-1*max_add_num):] #最大第一主应力所在的单元索引
+min_indices = np.argsort(max_principal_stress, axis=None)[:int(max_add_num)] #最大第一主应力所在的单元索引
+indices=np.concatenate((indices, min_indices),axis=0)
 # rows, cols = np.unravel_index(indices, max_principal_stress.shape)
 arrow_start_points = problem3.fe.points[problem3.fe.cells]
 max_stress_position=arrow_start_points[indices,:,:]
@@ -386,16 +386,16 @@ max_stress_position=np.mean(max_stress_position,axis=1)
 max_stress_direction=max_principal_directions[indices,:]
 
 
-max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*25) #15 18 15
+max_stress_position,max_stress_direction=ut.remove_nearby_points(max_stress_position,max_stress_direction,threshold=resolution2*40) #15 18 15 25
 
-max_stress_direction=np.stack((max_stress_direction[:,1]*-1,max_stress_direction[:,0]),axis=1) # vertical vector
+# max_stress_direction=np.stack((max_stress_direction[:,1]*-1,max_stress_direction[:,0]),axis=1) # vertical vector
 logging.info(f"max_stress_position.shape: {max_stress_position.shape}")
 print(f"max_stress_position.shape:{max_stress_position.shape[0]}")
 
 cp_ori=sites_ori.copy()
 cp=np.concatenate((cp_ori,max_stress_position+max_stress_direction*10),axis=0)
 sites=np.concatenate((sites_ori,max_stress_position),axis=0)
-Dm3=np.tile(np.array(([0.5,0],[0,0.5]))/resolution2,reps=(max_stress_position.shape[0],1,1)) #0.6
+Dm3=np.tile(np.array(([0.6,0],[0,0.6]))/resolution2,reps=(max_stress_position.shape[0],1,1)) #0.6 0.5
 Dm= np.concatenate((Dm,Dm3),axis=0) #0.9
 
 rho = voronoi_field(coordinates, sites,rho_cell_mm, Dm=Dm,cp=cp).reshape(Nx2,Ny2)
@@ -410,13 +410,13 @@ plt.scatter(sites[:, 1] // resolution2, sites[:, 0] // resolution2, marker='+', 
 plt.scatter(sites_ori[:, 1] // resolution2, sites_ori[:, 0] // resolution2, marker='+', color='violet')
 plt.savefig(f"block/10_VD3.png")
 plt.draw()
-shadow=np.ones_like(rho)
-for i in range(len(start_x)):
-    start=start_x[i]
-    end=end_x[i]
-    shadow=shadow.at[start:end,:].set(2)
-rho_s=rho*shadow
-plt.imshow(rho_s, cmap='viridis')
-plt.savefig(f"block/local.png")
-plt.draw()
+# shadow=np.ones_like(rho)
+# for i in range(len(start_x)):
+#     start=start_x[i]
+#     end=end_x[i]
+#     shadow=shadow.at[start:end,:].set(2)
+# rho_s=rho*shadow
+# plt.imshow(rho_s, cmap='viridis')
+# plt.savefig(f"block/local.png")
+# plt.draw()
 print(f"mean:{np.mean(rho)}")
