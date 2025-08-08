@@ -1,16 +1,17 @@
 # Design optimization of graded cellular structures for additive manufacturing via differentiable Voronoi diagram
 * DOI: https://doi.org/10.1016/j.cirp.2025.04.035
-![topology optimization](imgs/topo.png)
+
+# ![topology optimization](imgs/topo.png)
 * topology optimization
-![multiscale](imgs/multi.png)
+# ![multiscale](imgs/multi.png)
 * multiscale and pseudo sites
-![auxetic](imgs/auxetic.png)
+# ![auxetic](imgs/auxetic.png)
 * pseudo sites for auxetics
-![img_1.png](imgs/print_1.png)
+# ![img_1.png](imgs/print_1.png)
 * print result
-![img.png](imgs/print_2.png)
+# ![img.png](imgs/print_2.png)
 * print result2
-![img.png](imgs/stress.png)
+# ![img.png](imgs/stress.png)
 * von mises stress give out by JAX-FEM
 # Here we supported 3 entrances of code:
 * #### [manual.py](src/manual.py)
