@@ -172,7 +172,6 @@ class MMA:
         xmamieps = 0.00001*eeen
         xmami = np.maximum(xmami,xmamieps)
         xmamiinv = eeen/xmami
-        #xval距离渐近线的距离
         ux1 = upp-xval
         ux2 = ux1*ux1
         xl1 = xval-low
@@ -182,16 +181,13 @@ class MMA:
 
         p0 = np.maximum(df0dx,0) #目标梯度的正部分
         q0 = np.maximum(-df0dx,0) #目标梯度的负部分
-        # 引入微小扰动pq0防止梯度过小
         pq0 = 0.001*(p0+q0)+raa0*xmamiinv
         p0 = p0+pq0
         q0 = q0+pq0
-        #权重更新，使得p,q与距离有关
         p0 = p0*ux2
         q0 = q0*xl2
         P = np.zeros((m,n)) ## @@ make sparse with scipy?
         Q = np.zeros((m,n)) ## @@ make sparse with scipy?
-        #约束函数的正负梯度
         P = np.maximum(dfdx,0)
         Q = np.maximum(-dfdx,0)
         PQ = 0.001*(P+Q)+raa0*np.dot(eeem,xmamiinv.T)
@@ -200,7 +196,6 @@ class MMA:
 
         # P = (diags(ux2.flatten(),0).dot(P.T)).T
         # Q = (diags(xl2.flatten(),0).dot(Q.T)).T
-        #最终形状应该是 m,n 表示每个约束对每个变量的正负梯度
         P = ux2.T*P
         Q = xl2.T*Q
 
@@ -221,7 +216,6 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
     epsi = 1
     epsvecn = epsi*een
     epsvecm = epsi*eem
-    # 拉格朗日乘子初始化
     x = 0.5*(alfa+beta)
     y = eem.copy()
     z = np.array([[1.0]])
@@ -344,7 +338,6 @@ def subsolv(m,n,epsimin,low,upp,alfa,beta,p0,q0,P,Q,a0,a,b,c,d):
             ds = -s+epsvecm/lam-(s*dlam)/lam
             xx = np.concatenate((y,z,lam,xsi,eta,mu,zet,s),axis = 0)
             dxx = np.concatenate((dy,dz,dlam,dxsi,deta,dmu,dzet,ds),axis = 0)
-            """在这里加了个小常数"""
             # print(f"dxx:{dxx}")
             # print(f"xx:{xx}")
             stepxx = -1.01*dxx/(xx+ 1e-10)

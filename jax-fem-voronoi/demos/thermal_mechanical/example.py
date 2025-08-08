@@ -298,5 +298,6 @@ for i in range(len(ts[1:])):
                                                         cell_infos=[('f_plus', np.mean(plastic_info[0], axis=1)),
                                                                     ('stress_xx', np.mean(plastic_info[1], axis=1)),
                                                                     ('phase', np.max(params_u[-1][:, :, 0], axis=1))])
+
     # Update T solution
     sol_T_old = sol_T_new

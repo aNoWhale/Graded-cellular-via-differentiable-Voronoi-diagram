@@ -172,6 +172,7 @@ optimize(problem.fe, rho_ini, optimizationParams, objectiveHandle, consHandle, n
 print(f"As a reminder, compliance = {J_total(np.ones((len(problem.fe.flex_inds), 1)))} for full material")
 
 
+
 # Plot the optimization results.
 obj = onp.array(outputs)
 plt.figure(figsize=(10, 8))

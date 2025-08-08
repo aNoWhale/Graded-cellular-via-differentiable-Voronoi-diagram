@@ -110,13 +110,10 @@ class Elasticity(Problem):
         return np.sqrt(np.square(val - self.target))
 
     def compute_stiffness(self, sol):
-        # 获取所有单元索引
         # cell_inds = np.arange(len(self.fe.cells))
 
-        # 获取形函数梯度和 Jacobian 行列式
         cell_grads, jacobian_det = self.fe.get_shape_grads()  # 假设不需要 cell_inds 参数
 
-        # 位移梯度: strain = grad(u)
         # u_cell = sol[self.fe.cells]  # (num_cells, num_nodes, dim)，提取单元位移
         # strain = np.einsum('cnd,cqnd->cqd', u_cell, cell_grads)  # (num_cells, num_quads, dim, dim)
         u_grad = self.fes[0].sol_to_grad(sol)
@@ -127,15 +124,13 @@ class Elasticity(Problem):
         strain = jax.vmap(jax.vmap(strain_fn))(u_grad)
         # strainmax=strain.max()
         # strainmin=strain.min()
-        # 获取应力计算函数
-        stress_fn = self.get_tensor_map()  # 使用实例化的 `get_tensor_map` 函数，直接获取应力计算函数
+        stress_fn = self.get_tensor_map()
 
-        # 计算应力
+
         # stress = jax.vmap(jax.vmap(stress_fn))(strain, self.internal_vars[0])  # 应力计算，theta 和 strain
         stress = jax.vmap(jax.vmap(stress_fn))(u_grad, self.internal_vars[0])  # 应力计算，theta 和 strain
         # stressmax=stress.max()
         # stressmin=stress.min()
-        # 计算能量密度: W = 0.5 * stress : strain
         energy_density = 0.5 * np.einsum('cqij,cqij->cq', stress, strain)  # (num_cells, num_quads)
 
 
@@ -145,23 +140,16 @@ class Elasticity(Problem):
         # return np.sqrt(np.square(stiffness - self.target))
 
     def compute_first_principal_stress(self, sol):
-        # 获取形函数梯度和 Jacobian 行列式
         cell_grads, _ = self.fe.get_shape_grads()
-        # 计算位移梯度
         u_grad = self.fes[0].sol_to_grad(sol)
-        # 计算应力张量
         stress_fn = self.get_tensor_map()
         stress = jax.vmap(jax.vmap(stress_fn))(u_grad, self.internal_vars[0])  # (num_cells, num_quads, dim, dim)
-        # 计算主应力和主方向
         def compute_first_principal_stress(sigma):
-            # 对每个应力张量求解特征值和特征向量
-            eigvals, eigvecs = np.linalg.eigh(sigma)  # 使用 jax 提供的 eigh
-            # 返回最大特征值（第一主应力）和对应的特征向量（第一主方向）
-            principal_stress = eigvals[:, -1]  # 取最大特征值
-            principal_direction = eigvecs[:, :, -1]  # 对应的主方向
+            eigvals, eigvecs = np.linalg.eigh(sigma)
+            principal_stress = eigvals[:, -1]
+            principal_direction = eigvecs[:, :, -1]
             return principal_stress, principal_direction
 
-        # 使用 jax.vmap 对所有单元和积分点进行计算
         principal_stress, principal_directions = jax.vmap(jax.vmap(compute_first_principal_stress))(stress)
         return principal_stress, principal_directions
 
@@ -235,14 +223,14 @@ location_fns = [load_location]
 # In the following, 'sol = fwd_pred(params)' basically says U = U(theta).
 def J_total(params):
     """
-    目标函数
+
     :param params:
     :return:
     """
     # J(u(theta), theta)
     sol_list = fwd_pred(params)
     compliance = problem.compute_compliance(sol_list[0])
-    """指定目标"""
+
     # compliance = problem.compute_compliance_target(sol_list[0],target=0)
     return compliance
 def output_sol(params, obj_val):
@@ -260,7 +248,7 @@ output_sol.counter = 0
 # Prepare J_total and dJ/d(theta) that are required by the MMA optimizer.
 def objectiveHandle(p):
     """
-    定义目标函数和梯度计算 (MMA 使用)
+
     :param p:
     :return:
     """
@@ -338,7 +326,7 @@ first_full=J_total(np.ones((len(problem.fe.flex_inds), 1)))
 logger.info(f"As a reminder, compliance = {first_full} for full material")
 """""""""""""""""""""""""""""""""scale up"""""""""""""""""""""""""""""""""
 print(f"zooming up......")
-# 计算缩放比例
+
 scale = 3
 resolution2=round(resolution/scale,4)
 padding_size=10 # pixel
@@ -347,7 +335,7 @@ Nx2,Ny2= Nx * scale, Ny * scale + padding_size * 2
 print(f"Nx2 = {Nx2}, Ny2 = {Ny2}")
 coordinates = np.indices((Nx2, Ny2))*resolution2
 
-# 使用 zoom 进行缩放
+
 rho_oped=rho_oped.reshape(Nx,Ny)
 rho_oped = np.array(zoom(rho_oped, (scale, scale), order=1))  # order=1 表示线性插值
 padding=np.zeros((Nx2,padding_size))
@@ -358,12 +346,12 @@ rho=rho_oped.reshape((Nx2, Ny2))
 # last_vf=np.mean(rho_oped)
 last_vf=vf
 
-#硬边界
+
 # rho_mask = rho
 # structure = ndimage.generate_binary_structure(2, 2)  # 定义结构元素
 # binary_matrix = (rho_mask > 0.5)
 # boundary = binary_matrix ^ ndimage.binary_erosion(binary_matrix, structure=structure)
-# # 软边界
+
 # rho_mask=ut.blur_edges(rho,blur_sigma=1.)
 # boundary=ut.extract_continuous_boundary(rho,threshold=0.5)
 sites_boundary=p_oped[:optimizationParams["sites_num"]*2].reshape((-1,2))
@@ -403,7 +391,6 @@ def J_total2(params):
     # compliance = problem2.compute_compliance(sol_list[0])
     stiffness = problem2.compute_stiffness(sol_list[0])
 
-    """指定目标"""
     # compliance = problem.compute_compliance_target(sol_list[0],target=0)
     return stiffness
 def output_sol2(params, obj_val):
@@ -419,7 +406,7 @@ def output_sol2(params, obj_val):
     output_sol.counter += 1
 def objectiveHandle2(p):
     """
-    定义目标函数和梯度计算 (MMA 使用)
+
     :param p:
     :return:
     """
